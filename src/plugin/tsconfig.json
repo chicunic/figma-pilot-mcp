@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "typeRoots": [
+      "../../node_modules/@figma"
+    ],
+    "types": ["plugin-typings"]
+  },
+  "include": ["./**/*.ts"]
+}

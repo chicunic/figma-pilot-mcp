@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font: 12px Inter, -apple-system, sans-serif;
+        background: #1e1e1e;
+        color: #fff;
+        padding: 16px;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 16px;
+      }
+      .header h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 4px;
+      }
+      .header p,
+      .port-input label,
+      .selection-count,
+      .node-meta {
+        color: #888;
+        font-size: 11px;
+      }
+      .btn,
+      .copy-btn,
+      .copy-all-btn {
+        border: 0;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        color: #fff;
+      }
+      .btn {
+        width: 100%;
+        padding: 6px;
+        font-weight: 500;
+      }
+      .btn-primary {
+        background: #0d99ff;
+      }
+      .btn-primary:hover {
+        background: #0b85e0;
+      }
+      .btn-danger {
+        background: #e53935;
+      }
+      .btn-danger:hover {
+        background: #c62828;
+      }
+      .copy-btn,
+      .copy-all-btn {
+        background: #444;
+        padding: 6px 10px;
+      }
+      .copy-btn:hover,
+      .copy-all-btn:hover {
+        background: #555;
+      }
+      .copy-btn.copied,
+      .copy-all-btn.copied {
+        background: #4caf50;
+      }
+      .copy-all-btn {
+        width: 100%;
+        margin-bottom: 8px;
+      }
+      .connection,
+      .selection {
+        padding: 12px;
+        background: #2a2a2a;
+        border-radius: 6px;
+      }
+      .connection {
+        margin-bottom: 12px;
+      }
+      .connection-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+      }
+      .connection-status,
+      .port-input {
+        display: flex;
+        align-items: center;
+      }
+      .port-input {
+        gap: 6px;
+      }
+      .port-input input {
+        width: 50px;
+        padding: 4px 8px;
+        background: #333;
+        border: 1px solid #444;
+        border-radius: 4px;
+        color: #fff;
+        font: 11px monospace;
+        text-align: center;
+        appearance: textfield;
+        -moz-appearance: textfield;
+      }
+      .port-input input::-webkit-outer-spin-button,
+      .port-input input::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+      }
+      .port-input input:focus {
+        outline: 0;
+        border-color: #0d99ff;
+      }
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 8px;
+      }
+      .status-dot.connected {
+        background: #4caf50;
+      }
+      .status-dot.disconnected {
+        background: #e53935;
+      }
+      .channel-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .channel-value {
+        flex: 1;
+        padding: 6px 10px;
+        background: #333;
+        border-radius: 4px;
+        font: 11px monospace;
+        color: #0d99ff;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .selection h3 {
+        font-size: 12px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .selection-empty {
+        color: #666;
+        font-size: 11px;
+        font-style: italic;
+      }
+      .node-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        background: #333;
+        border-radius: 4px;
+        font-size: 11px;
+      }
+      .node-item:last-child {
+        margin-bottom: 0;
+      }
+      .node-info {
+        flex: 1;
+        min-width: 0;
+        margin-right: 8px;
+      }
+      .node-name {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .node-meta {
+        font-size: 10px;
+        margin-top: 2px;
+      }
+      .node-id {
+        font-family: monospace;
+        color: #0d99ff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>Figma Pilot</h1>
+      <p>MCP WebSocket Bridge</p>
+    </div>
+    <div class="connection">
+      <div class="connection-header">
+        <div class="connection-status">
+          <span class="status-dot disconnected" id="status-dot"></span><span id="status-text">Disconnected</span>
+        </div>
+        <div class="port-input">
+          <label>Port</label><input type="number" id="port" value="3846" min="1" max="65535" />
+        </div>
+      </div>
+      <div class="channel-row">
+        <div class="channel-value" id="channel"></div>
+        <button class="copy-btn" id="copy-channel-btn">Copy</button>
+      </div>
+      <button class="btn btn-primary" id="connect-btn">Connect</button>
+      <button class="btn btn-danger" id="disconnect-btn" style="display: none">Disconnect</button>
+    </div>
+    <div class="selection">
+      <h3>Selection <span class="selection-count" id="selection-count"></span></h3>
+      <div id="selection-content"><div class="selection-empty">No nodes selected</div></div>
+    </div>
+    <div style="text-align:center;padding:8px 0 4px;font-size:11px;color:#999;">
+      💗 <a href="https://github.com/chicunic/figma-pilot-mcp" target="_blank" style="color:#999;text-decoration:none;">Star this project on GitHub</a>
+    </div>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const channelEl = $('channel'),
+        connectBtn = $('connect-btn'),
+        disconnectBtn = $('disconnect-btn');
+      const statusDot = $('status-dot'),
+        statusText = $('status-text'),
+        portInput = $('port');
+      const selectionCount = $('selection-count'),
+        selectionContent = $('selection-content');
+
+      // WebSocket state (managed in UI thread)
+      let ws = null;
+      let currentChannel = null;
+
+      function copyToClipboard(t, b) {
+        // Use execCommand as fallback for Figma plugin iframe environment
+        var textarea = document.createElement('textarea');
+        textarea.value = t;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy');
+          var o = b.textContent;
+          b.textContent = 'Copied!';
+          b.classList.add('copied');
+          setTimeout(function() {
+            b.textContent = o;
+            b.classList.remove('copied');
+          }, 1000);
+        } catch (err) {
+          console.error('Copy failed:', err);
+        }
+        document.body.removeChild(textarea);
+      }
+
+      $('copy-channel-btn').onclick = function () {
+        copyToClipboard(channelEl.textContent, this);
+      };
+
+      function updateSelection(nodes) {
+        if (!nodes.length) {
+          selectionCount.textContent = '';
+          selectionContent.innerHTML = '<div class="selection-empty">No nodes selected</div>';
+          return;
+        }
+        selectionCount.textContent = '(' + nodes.length + ')';
+        let h =
+          nodes.length > 1
+            ? '<button class="copy-all-btn" data-ids="' + nodes.map(function(n) { return n.id; }).join(', ') + '">Copy All IDs</button>'
+            : '';
+        h += nodes
+          .map(function(n) {
+            return '<div class="node-item"><div class="node-info"><div class="node-name">' + escapeHtml(n.name) +
+              '</div><div class="node-meta"><span class="node-id">' + n.id + '</span> · ' + n.type +
+              '</div></div><button class="copy-btn" data-id="' + n.id + '">Copy</button></div>';
+          })
+          .join('');
+        selectionContent.innerHTML = h;
+        selectionContent.querySelectorAll('.copy-btn').forEach(function(b) {
+          b.onclick = function () {
+            copyToClipboard(this.dataset.id, this);
+          };
+        });
+        var a = selectionContent.querySelector('.copy-all-btn');
+        if (a) {
+          a.onclick = function () {
+            copyToClipboard(this.dataset.ids, this);
+          };
+        }
+      }
+
+      function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      function setConnected(channel) {
+        statusDot.className = 'status-dot connected';
+        statusText.textContent = 'Connected';
+        connectBtn.style.display = 'none';
+        disconnectBtn.style.display = 'block';
+        portInput.disabled = true;
+      }
+
+      function setDisconnected() {
+        statusDot.className = 'status-dot disconnected';
+        statusText.textContent = 'Disconnected';
+        connectBtn.style.display = 'block';
+        disconnectBtn.style.display = 'none';
+        portInput.disabled = false;
+      }
+
+      // WebSocket connection (runs in UI thread where WebSocket is available)
+      function connectToServer(port, channel) {
+        if (ws) {
+          ws.close();
+        }
+
+        var url = 'ws://localhost:' + port;
+        currentChannel = channel;
+
+        try {
+          ws = new WebSocket(url);
+
+          ws.onopen = function() {
+            ws.send(JSON.stringify({ type: 'join', channel: currentChannel }));
+            setConnected(currentChannel);
+            parent.postMessage({ pluginMessage: { type: 'notify', message: 'Connected to channel: ' + currentChannel } }, '*');
+          };
+
+          ws.onmessage = function(event) {
+            try {
+              var data = JSON.parse(event.data);
+              if (data.type === 'ping') {
+                ws.send(JSON.stringify({ type: 'pong' }));
+                return;
+              }
+              if (data.type === 'broadcast' && data.channel === currentChannel) {
+                // Forward command to main thread for execution
+                parent.postMessage({ pluginMessage: { type: 'command', data: data.message } }, '*');
+              }
+            } catch (err) {
+              console.error('Failed to parse message:', err);
+            }
+          };
+
+          ws.onerror = function() {
+            alert('Connection error');
+          };
+
+          ws.onclose = function() {
+            setDisconnected();
+            ws = null;
+          };
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+
+      function disconnect() {
+        if (ws) {
+          ws.send(JSON.stringify({ type: 'leave', channel: currentChannel }));
+          ws.close();
+          ws = null;
+          currentChannel = null;
+        }
+        setDisconnected();
+      }
+
+      function sendResponse(response) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'broadcast',
+            channel: currentChannel,
+            message: response
+          }));
+        }
+      }
+
+      connectBtn.onclick = function() {
+        var port = parseInt(portInput.value) || 3846;
+        var channel = channelEl.textContent.trim();
+        if (!channel) {
+          alert('Channel not available');
+          return;
+        }
+        connectToServer(port, channel);
+      };
+
+      disconnectBtn.onclick = function() {
+        disconnect();
+      };
+
+      window.onmessage = function(event) {
+        var msg = event.data.pluginMessage;
+        if (!msg) return;
+
+        switch (msg.type) {
+          case 'selection':
+            updateSelection(msg.nodes);
+            break;
+          case 'file-info':
+            channelEl.textContent = msg.channel;
+            break;
+          case 'command-response':
+            // Forward response back to server
+            sendResponse(msg.response);
+            break;
+        }
+      };
+    </script>
+  </body>
+</html>
