@@ -15,10 +15,10 @@ export interface FigmaResponse {
 
 // WebSocket message type
 export type WebSocketMessage =
-  | { type: "join"; channel: string }
-  | { type: "leave"; channel: string }
-  | { type: "message"; channel: string; message: FigmaCommand }
-  | { type: "broadcast"; channel: string; message: FigmaResponse };
+  | { type: 'join'; channel: string }
+  | { type: 'leave'; channel: string }
+  | { type: 'message'; channel: string; message: FigmaCommand }
+  | { type: 'broadcast'; channel: string; message: FigmaResponse };
 
 // Pending request
 export interface PendingRequest {
@@ -28,7 +28,7 @@ export interface PendingRequest {
 }
 
 // Tool mode
-export type ToolMode = "read-write" | "write-only";
+export type ToolMode = 'read-write' | 'write-only';
 
 // Server configuration
 export interface ServerConfig {

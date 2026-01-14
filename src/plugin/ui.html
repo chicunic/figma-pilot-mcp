@@ -233,6 +233,7 @@
       function copyToClipboard(t, b) {
         // Use execCommand as fallback for Figma plugin iframe environment
         var textarea = document.createElement('textarea');
+        var o;
         textarea.value = t;
         textarea.style.position = 'fixed';
         textarea.style.opacity = '0';
@@ -240,10 +241,10 @@
         textarea.select();
         try {
           document.execCommand('copy');
-          var o = b.textContent;
+          o = b.textContent;
           b.textContent = 'Copied!';
           b.classList.add('copied');
-          setTimeout(function() {
+          setTimeout(() => {
             b.textContent = o;
             b.classList.remove('copied');
           }, 1000);
@@ -263,20 +264,18 @@
           selectionContent.innerHTML = '<div class="selection-empty">No nodes selected</div>';
           return;
         }
-        selectionCount.textContent = '(' + nodes.length + ')';
+        selectionCount.textContent = `(${nodes.length})`;
         let h =
           nodes.length > 1
-            ? '<button class="copy-all-btn" data-ids="' + nodes.map(function(n) { return n.id; }).join(', ') + '">Copy All IDs</button>'
+            ? `<button class="copy-all-btn" data-ids="${nodes.map((n) => n.id).join(', ')}">Copy All IDs</button>`
             : '';
         h += nodes
-          .map(function(n) {
-            return '<div class="node-item"><div class="node-info"><div class="node-name">' + escapeHtml(n.name) +
+          .map((n) => '<div class="node-item"><div class="node-info"><div class="node-name">' + escapeHtml(n.name) +
               '</div><div class="node-meta"><span class="node-id">' + n.id + '</span> · ' + n.type +
-              '</div></div><button class="copy-btn" data-id="' + n.id + '">Copy</button></div>';
-          })
+              '</div></div><button class="copy-btn" data-id="' + n.id + '">Copy</button></div>')
           .join('');
         selectionContent.innerHTML = h;
-        selectionContent.querySelectorAll('.copy-btn').forEach(function(b) {
+        selectionContent.querySelectorAll('.copy-btn').forEach((b) => {
           b.onclick = function () {
             copyToClipboard(this.dataset.id, this);
           };
@@ -295,7 +294,7 @@
         return div.innerHTML;
       }
 
-      function setConnected(channel) {
+      function setConnected(_channel) {
         statusDot.className = 'status-dot connected';
         statusText.textContent = 'Connected';
         connectBtn.style.display = 'none';
@@ -313,25 +312,26 @@
 
       // WebSocket connection (runs in UI thread where WebSocket is available)
       function connectToServer(port, channel) {
+        var url, data;
         if (ws) {
           ws.close();
         }
 
-        var url = 'ws://localhost:' + port;
+        url = `ws://localhost:${port}`;
         currentChannel = channel;
 
         try {
           ws = new WebSocket(url);
 
-          ws.onopen = function() {
+          ws.onopen = () => {
             ws.send(JSON.stringify({ type: 'join', channel: currentChannel }));
             setConnected(currentChannel);
-            parent.postMessage({ pluginMessage: { type: 'notify', message: 'Connected to channel: ' + currentChannel } }, '*');
+            parent.postMessage({ pluginMessage: { type: 'notify', message: `Connected to channel: ${currentChannel}` } }, '*');
           };
 
-          ws.onmessage = function(event) {
+          ws.onmessage = (event) => {
             try {
-              var data = JSON.parse(event.data);
+              data = JSON.parse(event.data);
               if (data.type === 'ping') {
                 ws.send(JSON.stringify({ type: 'pong' }));
                 return;
@@ -345,16 +345,16 @@
             }
           };
 
-          ws.onerror = function() {
+          ws.onerror = () => {
             alert('Connection error');
           };
 
-          ws.onclose = function() {
+          ws.onclose = () => {
             setDisconnected();
             ws = null;
           };
         } catch (err) {
-          alert('Error: ' + err.message);
+          alert(`Error: ${err.message}`);
         }
       }
 
@@ -378,8 +378,8 @@
         }
       }
 
-      connectBtn.onclick = function() {
-        var port = parseInt(portInput.value) || 3846;
+      connectBtn.onclick = () => {
+        var port = parseInt(portInput.value, 10) || 3846;
         var channel = channelEl.textContent.trim();
         if (!channel) {
           alert('Channel not available');
@@ -388,11 +388,11 @@
         connectToServer(port, channel);
       };
 
-      disconnectBtn.onclick = function() {
+      disconnectBtn.onclick = () => {
         disconnect();
       };
 
-      window.onmessage = function(event) {
+      window.onmessage = (event) => {
         var msg = event.data.pluginMessage;
         if (!msg) return;
 

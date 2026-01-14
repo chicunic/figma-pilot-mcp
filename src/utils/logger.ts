@@ -8,12 +8,12 @@ const log = (level: string, message: string, data?: unknown) => {
 };
 
 export const logger = {
-  info: (message: string, data?: unknown) => log("INFO", message, data),
-  warn: (message: string, data?: unknown) => log("WARN", message, data),
-  error: (message: string, data?: unknown) => log("ERROR", message, data),
+  info: (message: string, data?: unknown) => log('INFO', message, data),
+  warn: (message: string, data?: unknown) => log('WARN', message, data),
+  error: (message: string, data?: unknown) => log('ERROR', message, data),
   debug: (message: string, data?: unknown) => {
     if (process.env.DEBUG) {
-      log("DEBUG", message, data);
+      log('DEBUG', message, data);
     }
   },
 };

@@ -15,14 +15,17 @@ export interface RGBAInput {
 
 // Parse HEX color to RGBA (0-1)
 export function parseColor(color: string | RGBAInput): RGBA {
-  if (typeof color === "object") {
+  if (typeof color === 'object') {
     return { r: color.r, g: color.g, b: color.b, a: color.a ?? 1 };
   }
 
   // Remove # prefix
-  const hex = color.replace(/^#/, "");
+  const hex = color.replace(/^#/, '');
 
-  let r: number, g: number, b: number, a = 1;
+  let r: number,
+    g: number,
+    b: number,
+    a = 1;
 
   if (hex.length === 3) {
     // #RGB -> #RRGGBB
@@ -54,10 +57,10 @@ export function parseColor(color: string | RGBAInput): RGBA {
 }
 
 // Zod schema for color
-import { z } from "zod";
+import { z } from 'zod';
 
 export const colorSchema = z.union([
-  z.string().regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/, "Invalid HEX color"),
+  z.string().regex(/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/, 'Invalid HEX color'),
   z.object({
     r: z.number().min(0).max(1),
     g: z.number().min(0).max(1),

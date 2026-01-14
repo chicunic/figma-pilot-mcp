@@ -1,24 +1,15 @@
 {
   "name": "figma-pilot-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "An MCP server that gives AI full control over Figma — read, create, and modify designs.",
   "type": "module",
-  "main": "dist/server.js",
-  "bin": {
-    "figma-pilot-mcp": "dist/server.js"
-  },
-  "files": [
-    "dist"
-  ],
   "scripts": {
     "dev": "bun run --watch src/server.ts",
     "start": "bun run src/server.ts",
-    "build": "bun build src/server.ts --outdir dist --target node",
-    "build:plugin": "bunx esbuild src/plugin/code.ts --bundle --outfile=dist/plugin/code.js --target=es2018 --format=iife && cp src/plugin/manifest.json src/plugin/ui.html dist/plugin/",
-    "typecheck": "tsc --noEmit",
-    "typecheck:plugin": "tsc -p src/plugin/tsconfig.json",
-    "lint": "eslint src",
-    "lint:fix": "eslint src --fix"
+    "build": "bunx esbuild src/plugin/code.ts --bundle --outfile=dist/plugin/code.js --target=es2018 --format=iife && cp src/plugin/manifest.json src/plugin/ui.html dist/plugin/",
+    "typecheck": "tsc --noEmit && tsc -p src/plugin/tsconfig.json",
+    "check": "biome check src --write",
+    "format": "biome format src --write"
   },
   "keywords": [
     "figma",
@@ -31,19 +22,13 @@
   "author": "chicunic",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.25.1",
-    "zod": "^4.2.1"
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
-    "@eslint/compat": "^2.0.0",
-    "@eslint/js": "^9.39.2",
-    "@figma/eslint-plugin-figma-plugins": "^1.0.0",
+    "@biomejs/biome": "^2.3.11",
     "@figma/plugin-typings": "^1.121.0",
     "@types/bun": "latest",
-    "@typescript-eslint/parser": "^8.50.0",
-    "eslint": "^9.39.2",
-    "jiti": "^2.6.1",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0"
+    "typescript": "^5.9.3"
   }
 }

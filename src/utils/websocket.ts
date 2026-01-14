@@ -1,6 +1,6 @@
-import { config } from "../config/index.ts";
-import { logger } from "./logger.ts";
-import type { FigmaCommand, FigmaResponse, PendingRequest } from "../types/index.ts";
+import { config } from '../config/index.ts';
+import type { FigmaCommand, FigmaResponse, PendingRequest } from '../types/index.ts';
+import { logger } from './logger.ts';
 
 // WebSocket server state
 type ServerWebSocket = {
@@ -38,7 +38,7 @@ function joinChannel(ws: ServerWebSocket, channel: string) {
   }
   channels.get(channel)!.add(ws);
 
-  logger.info("Client joined channel", { channel });
+  logger.info('Client joined channel', { channel });
 }
 
 function leaveChannel(ws: ServerWebSocket, channel: string) {
@@ -52,7 +52,7 @@ function leaveChannel(ws: ServerWebSocket, channel: string) {
     channels.delete(channel);
   }
 
-  logger.info("Client left channel", { channel });
+  logger.info('Client left channel', { channel });
 }
 
 function handleMessage(ws: ServerWebSocket, message: string | Buffer) {
@@ -60,20 +60,20 @@ function handleMessage(ws: ServerWebSocket, message: string | Buffer) {
     const data = JSON.parse(message.toString());
 
     switch (data.type) {
-      case "join":
+      case 'join':
         joinChannel(ws, data.channel);
         break;
 
-      case "leave":
+      case 'leave':
         leaveChannel(ws, data.channel);
         break;
 
-      case "message": {
+      case 'message': {
         // Broadcast message to channel
         const channelClients = channels.get(data.channel);
         if (channelClients) {
           const broadcastData = JSON.stringify({
-            type: "broadcast",
+            type: 'broadcast',
             channel: data.channel,
             message: data.message,
           });
@@ -86,7 +86,7 @@ function handleMessage(ws: ServerWebSocket, message: string | Buffer) {
         break;
       }
 
-      case "broadcast": {
+      case 'broadcast': {
         // Handle response from Figma plugin
         if (data.channel === mcpChannel && data.message) {
           const response = data.message as FigmaResponse;
@@ -100,13 +100,13 @@ function handleMessage(ws: ServerWebSocket, message: string | Buffer) {
         break;
       }
 
-      case "ping": {
+      case 'ping': {
         // Reply pong
-        ws.send(JSON.stringify({ type: "pong" }));
+        ws.send(JSON.stringify({ type: 'pong' }));
         break;
       }
 
-      case "pong": {
+      case 'pong': {
         // Update last heartbeat time
         const client = clients.get(ws);
         if (client) {
@@ -116,10 +116,10 @@ function handleMessage(ws: ServerWebSocket, message: string | Buffer) {
       }
 
       default:
-        logger.warn("Unknown message type", { type: data.type });
+        logger.warn('Unknown message type', { type: data.type });
     }
   } catch (err) {
-    logger.error("Failed to parse message", err);
+    logger.error('Failed to parse message', err);
   }
 }
 
@@ -129,51 +129,60 @@ function startHeartbeat() {
     for (const [ws, client] of clients) {
       // Check if timeout
       if (now - client.lastPing > HEARTBEAT_INTERVAL + HEARTBEAT_TIMEOUT) {
-        logger.warn("Client heartbeat timeout, closing connection");
+        logger.warn('Client heartbeat timeout, closing connection');
         ws.close();
         continue;
       }
       // Send ping
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: "ping" }));
+        ws.send(JSON.stringify({ type: 'ping' }));
       }
     }
   }, HEARTBEAT_INTERVAL);
 }
 
 export function startWebSocketServer() {
-  const server = Bun.serve({
-    port: config.socketPort,
-    fetch(req, server) {
-      if (server.upgrade(req, { data: {} })) {
-        return;
-      }
-      return new Response("Figma Pilot WebSocket Server", { status: 200 });
-    },
-    websocket: {
-      open(ws: ServerWebSocket) {
-        clients.set(ws, { ws, channels: new Set(), lastPing: Date.now() });
-        logger.info("Client connected", { total: clients.size });
-      },
-      message: handleMessage,
-      close(ws: ServerWebSocket) {
-        const client = clients.get(ws);
-        if (client) {
-          for (const channel of client.channels) {
-            leaveChannel(ws, channel);
-          }
-          clients.delete(ws);
+  try {
+    const server = Bun.serve({
+      port: config.socketPort,
+      fetch(req, server) {
+        if (server.upgrade(req, { data: {} })) {
+          return;
         }
-        logger.info("Client disconnected", { total: clients.size });
+        return new Response('Figma Pilot WebSocket Server', { status: 200 });
       },
-    },
-  });
+      websocket: {
+        open(ws: ServerWebSocket) {
+          clients.set(ws, { ws, channels: new Set(), lastPing: Date.now() });
+          logger.info('Client connected', { total: clients.size });
+        },
+        message: handleMessage,
+        close(ws: ServerWebSocket) {
+          const client = clients.get(ws);
+          if (client) {
+            for (const channel of client.channels) {
+              leaveChannel(ws, channel);
+            }
+            clients.delete(ws);
+          }
+          logger.info('Client disconnected', { total: clients.size });
+        },
+      },
+    });
 
-  // Start heartbeat detection
-  startHeartbeat();
+    // Start heartbeat detection
+    startHeartbeat();
 
-  logger.info(`WebSocket server running on ws://localhost:${server.port}`);
-  return server;
+    logger.info(`WebSocket server running on ws://localhost:${server.port}`);
+    return server;
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && error.code === 'EADDRINUSE') {
+      throw new Error(
+        `Port ${config.socketPort} is already in use. Please stop the other process or change FIGMA_WS_PORT.`,
+      );
+    }
+    throw error;
+  }
 }
 
 // ========== MCP Client Functions ==========
@@ -195,28 +204,25 @@ export async function connectToFigma(channel: string): Promise<void> {
 
   // Check if Figma plugin is already connected to this channel
   if (!channels.has(channel) || channels.get(channel)!.size === 0) {
-    logger.warn("No Figma plugin connected to channel yet", { channel });
+    logger.warn('No Figma plugin connected to channel yet', { channel });
   }
 
-  logger.info("MCP connected to channel", { channel });
+  logger.info('MCP connected to channel', { channel });
 }
 
 export function disconnect(): void {
   mcpChannel = null;
-  logger.info("MCP disconnected from channel");
+  logger.info('MCP disconnected from channel');
 }
 
-export async function sendCommand(
-  command: string,
-  params: Record<string, unknown> = {}
-): Promise<FigmaResponse> {
+export async function sendCommand(command: string, params: Record<string, unknown> = {}): Promise<FigmaResponse> {
   if (!mcpChannel) {
-    throw new Error("Not connected to Figma. Use pilot_connect first.");
+    throw new Error('Not connected to Figma. Use pilot_connect first.');
   }
 
   const channelClients = channels.get(mcpChannel);
   if (!channelClients || channelClients.size === 0) {
-    throw new Error("No Figma plugin connected to this channel.");
+    throw new Error('No Figma plugin connected to this channel.');
   }
 
   const id = crypto.randomUUID();
@@ -232,7 +238,7 @@ export async function sendCommand(
 
     // 发送给频道内所有客户端
     const message = JSON.stringify({
-      type: "broadcast",
+      type: 'broadcast',
       channel: mcpChannel,
       message: figmaCommand,
     });
@@ -243,6 +249,6 @@ export async function sendCommand(
       }
     }
 
-    logger.debug("Sent command", { command, id });
+    logger.debug('Sent command', { command, id });
   });
 }

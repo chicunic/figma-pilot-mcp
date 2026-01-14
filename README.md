@@ -20,7 +20,7 @@ bun install
 1. **Build the Figma plugin**:
 
    ```bash
-   bun run build:plugin
+   bun run build
    ```
 
 2. **Import plugin into Figma Desktop**:
@@ -53,7 +53,7 @@ bun install
    - The plugin UI will show a channel name (e.g., `figma-pilot-abc123`)
    - In your MCP client, use `pilot_connect` with the channel name to establish connection
 
-   > **Tip**: After modifying plugin code, rebuild with `bun run build:plugin` and re-run the plugin in Figma to see changes.
+   > **Tip**: After modifying plugin code, rebuild with `bun run build` and re-run the plugin in Figma to see changes.
 
 ## Configuration
 
@@ -97,6 +97,7 @@ Environment variables:
 | `pilot_create_from_svg`            | Create node from SVG string           |
 | `pilot_create_image`               | Create image from base64              |
 | `pilot_create_table`               | Create a table (FigJam)               |
+| `pilot_create_node_tree`           | Create nested node structure at once  |
 
 ### Modification
 
@@ -165,23 +166,41 @@ Environment variables:
 
 ### Styles
 
-| Tool                        | Description                   |
-| --------------------------- | ----------------------------- |
-| `pilot_create_paint_style`  | Create a paint style          |
-| `pilot_create_text_style`   | Create a text style           |
-| `pilot_create_effect_style` | Create an effect style        |
-| `pilot_create_grid_style`   | Create a grid style           |
-| `pilot_apply_paint_style`   | Apply paint style to node     |
-| `pilot_apply_text_style`    | Apply text style to text node |
-| `pilot_apply_effect_style`  | Apply effect style to node    |
-| `pilot_apply_grid_style`    | Apply grid style to frame     |
+| Tool                            | Description                   |
+| ------------------------------- | ----------------------------- |
+| `pilot_create_paint_style`      | Create a paint style          |
+| `pilot_create_text_style`       | Create a text style           |
+| `pilot_create_effect_style`     | Create an effect style        |
+| `pilot_create_grid_style`       | Create a grid style           |
+| `pilot_apply_paint_style`       | Apply paint style to node     |
+| `pilot_apply_text_style`        | Apply text style to text node |
+| `pilot_apply_effect_style`      | Apply effect style to node    |
+| `pilot_apply_grid_style`        | Apply grid style to frame     |
+| `pilot_move_paint_style_after`  | Reorder paint style           |
+| `pilot_move_text_style_after`   | Reorder text style            |
+| `pilot_move_effect_style_after` | Reorder effect style          |
+| `pilot_move_grid_style_after`   | Reorder grid style            |
 
 ### Variables & Properties
 
-| Tool                             | Description                          |
-| -------------------------------- | ------------------------------------ |
-| `pilot_set_bound_variable`       | Bind variable to node property       |
-| `pilot_set_component_properties` | Set properties on component instance |
+| Tool                                       | Description                          |
+| ------------------------------------------ | ------------------------------------ |
+| `pilot_create_variable_collection`         | Create a variable collection         |
+| `pilot_create_variable`                    | Create a variable                    |
+| `pilot_set_variable_value`                 | Set variable value for a mode        |
+| `pilot_create_variable_alias`              | Create a variable alias              |
+| `pilot_set_bound_variable`                 | Bind variable to node property       |
+| `pilot_set_bound_variable_for_paint`       | Bind variable to paint fill          |
+| `pilot_set_bound_variable_for_effect`      | Bind variable to effect              |
+| `pilot_set_bound_variable_for_layout_grid` | Bind variable to layout grid         |
+| `pilot_set_component_properties`           | Set properties on component instance |
+
+### Team Library
+
+| Tool                           | Description                              |
+| ------------------------------ | ---------------------------------------- |
+| `pilot_import_style_by_key`    | Import style from team library by key    |
+| `pilot_import_variable_by_key` | Import variable from team library by key |
 
 ### Export & Prototype
 
@@ -192,39 +211,67 @@ Environment variables:
 
 ### Text
 
-| Tool                        | Description                                |
-| --------------------------- | ------------------------------------------ |
-| `pilot_set_text_content`    | Set text content                           |
-| `pilot_set_font_size`       | Set font size (supports batch)             |
-| `pilot_set_font_name`       | Set font family and style (supports batch) |
-| `pilot_set_font_weight`     | Set font weight (supports batch)           |
-| `pilot_set_text_color`      | Set text color (supports batch)            |
-| `pilot_set_line_height`     | Set line height (supports batch)           |
-| `pilot_set_letter_spacing`  | Set letter spacing (supports batch)        |
-| `pilot_set_text_align`      | Set text alignment (supports batch)        |
-| `pilot_set_text_decoration` | Set text decoration (supports batch)       |
-| `pilot_set_text_case`       | Set text case (supports batch)             |
+| Tool                          | Description                                |
+| ----------------------------- | ------------------------------------------ |
+| `pilot_set_text_content`      | Set text content                           |
+| `pilot_set_font_size`         | Set font size (supports batch)             |
+| `pilot_set_font_name`         | Set font family and style (supports batch) |
+| `pilot_set_font_weight`       | Set font weight (supports batch)           |
+| `pilot_set_text_color`        | Set text color (supports batch)            |
+| `pilot_set_line_height`       | Set line height (supports batch)           |
+| `pilot_set_letter_spacing`    | Set letter spacing (supports batch)        |
+| `pilot_set_text_align`        | Set text alignment (supports batch)        |
+| `pilot_set_text_decoration`   | Set text decoration (supports batch)       |
+| `pilot_set_text_case`         | Set text case (supports batch)             |
+| `pilot_set_paragraph_indent`  | Set paragraph indentation                  |
+| `pilot_set_paragraph_spacing` | Set paragraph spacing                      |
 
 ### Reading (read-write mode only)
 
-| Tool                             | Description                               |
-| -------------------------------- | ----------------------------------------- |
-| `pilot_get_node`                 | Get detailed node info by ID              |
-| `pilot_get_selection`            | Get current selection                     |
-| `pilot_find_nodes`               | Find nodes by type or name pattern        |
-| `pilot_get_children`             | Get children of a node                    |
-| `pilot_get_top_frame`            | Get the top-level frame containing a node |
-| `pilot_get_current_page`         | Get current page info                     |
-| `pilot_get_pages`                | Get all pages in document                 |
-| `pilot_get_local_styles`         | Get local styles                          |
-| `pilot_get_local_components`     | Get local components                      |
-| `pilot_get_local_variables`      | Get local variables                       |
-| `pilot_get_variable_collections` | Get variable collections                  |
-| `pilot_get_viewport`             | Get current viewport                      |
-| `pilot_export_node`              | Export node as PNG/JPG/SVG/PDF            |
-| `pilot_get_component_properties` | Get component/instance properties         |
-| `pilot_get_export_settings`      | Get export settings of a node             |
-| `pilot_get_reactions`            | Get prototype reactions of a node         |
+| Tool                              | Description                               |
+| --------------------------------- | ----------------------------------------- |
+| `pilot_get_node`                  | Get detailed node info by ID              |
+| `pilot_get_selection`             | Get current selection                     |
+| `pilot_find_nodes`                | Find nodes by type or name pattern        |
+| `pilot_get_children`              | Get children of a node                    |
+| `pilot_get_top_frame`             | Get the top-level frame containing a node |
+| `pilot_get_current_page`          | Get current page info                     |
+| `pilot_get_pages`                 | Get all pages in document                 |
+| `pilot_get_local_styles`          | Get local styles                          |
+| `pilot_get_local_components`      | Get local components                      |
+| `pilot_get_local_variables`       | Get local variables                       |
+| `pilot_get_variable_collections`  | Get variable collections                  |
+| `pilot_get_viewport`              | Get current viewport                      |
+| `pilot_export_node`               | Export node as PNG/JPG/SVG/PDF            |
+| `pilot_get_component_properties`  | Get component/instance properties         |
+| `pilot_get_export_settings`       | Get export settings of a node             |
+| `pilot_get_reactions`             | Get prototype reactions of a node         |
+| `pilot_get_image_by_hash`         | Get image by hash                         |
+| `pilot_get_image_bytes`           | Get image bytes from node                 |
+| `pilot_list_available_fonts`      | List available fonts                      |
+| `pilot_get_selection_colors`      | Get colors from selection                 |
+| `pilot_get_event_subscriptions`   | Get active event subscriptions            |
+
+### Components
+
+| Tool                        | Description                    |
+| --------------------------- | ------------------------------ |
+| `pilot_combine_as_variants` | Combine components as variants |
+
+### Events
+
+| Tool                      | Description                   |
+| ------------------------- | ----------------------------- |
+| `pilot_subscribe_event`   | Subscribe to Figma events     |
+| `pilot_unsubscribe_event` | Unsubscribe from Figma events |
+
+### Utilities
+
+| Tool                       | Description                   |
+| -------------------------- | ----------------------------- |
+| `pilot_parse_color`        | Parse color string to RGB     |
+| `pilot_parse_color_rgba`   | Parse color string to RGBA    |
+| `pilot_create_solid_paint` | Create solid paint from color |
 
 ### Batch
 
@@ -248,18 +295,73 @@ The `pilot_batch` tool allows executing multiple commands in sequence, with the 
 
 Use `$N` to reference the result of the Nth command (0-indexed), and `$N.property` to access nested properties.
 
+## Creating Node Trees
+
+The `pilot_create_node_tree` tool creates nested node structures in a single call:
+
+```json
+{
+  "tree": {
+    "type": "FRAME",
+    "name": "Card",
+    "width": 300,
+    "height": 200,
+    "layoutMode": "VERTICAL",
+    "paddingTop": 16,
+    "paddingRight": 16,
+    "paddingBottom": 16,
+    "paddingLeft": 16,
+    "itemSpacing": 12,
+    "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }],
+    "cornerRadius": 8,
+    "children": [
+      {
+        "type": "TEXT",
+        "name": "Title",
+        "characters": "Hello World",
+        "fontSize": 24,
+        "fontFamily": "Inter",
+        "fontStyle": "Bold"
+      },
+      {
+        "type": "RECTANGLE",
+        "name": "Divider",
+        "width": 268,
+        "height": 1,
+        "fills": [{ "type": "SOLID", "color": { "r": 0.9, "g": 0.9, "b": 0.9 } }]
+      },
+      {
+        "type": "TEXT",
+        "name": "Body",
+        "characters": "This is a card component created with a single API call.",
+        "fontSize": 14
+      }
+    ]
+  }
+}
+```
+
+Returns all created node IDs in a tree structure for easy reference.
+
 ## MCP Prompts
 
 Figma Pilot includes built-in prompts to help you get started:
 
-| Prompt               | Description                                 |
-| -------------------- | ------------------------------------------- |
-| `quick_start`        | Get started with Figma Pilot MCP            |
-| `design_system`      | Create a basic design system structure      |
-| `auto_layout`        | Master Auto Layout in Figma                 |
-| `component_workflow` | Best practices for working with components  |
-| `batch_operations`   | Efficient batch operations for bulk changes |
-| `prototyping`        | Add prototype interactions and flows        |
+| Prompt               | Description                                    |
+| -------------------- | ---------------------------------------------- |
+| `quick_start`        | Get started with Figma Pilot MCP               |
+| `design_system`      | Create a basic design system structure         |
+| `auto_layout`        | Master Auto Layout in Figma                    |
+| `component_workflow` | Best practices for working with components     |
+| `batch_operations`   | Efficient batch operations for bulk changes    |
+| `prototyping`        | Add prototype interactions and flows           |
+| `variables`          | Working with Figma variables                   |
+| `events`             | Event subscription system                      |
+| `images`             | Working with images                            |
+| `typography`         | Advanced text and typography                   |
+| `variants`           | Component variants workflow                    |
+| `node_tree`          | Create complex nested structures in one call   |
+| `utilities`          | Color parsing and utility functions            |
 
 ## Error Handling
 
@@ -287,12 +389,10 @@ Errors are returned with structured error codes for easier debugging:
 ```bash
 bun run dev          # Start server with watch mode
 bun run start        # Start server
-bun run build        # Build server for production
-bun run build:plugin # Build Figma plugin
-bun run typecheck    # Type check server code
-bun run typecheck:plugin  # Type check plugin code
-bun run lint         # Run ESLint
-bun run lint:fix     # Fix lint errors
+bun run build        # Build Figma plugin
+bun run typecheck    # Type check all code
+bun run check        # Lint and fix with Biome
+bun run format       # Format with Biome
 ```
 
 ## Project Structure

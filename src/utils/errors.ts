@@ -53,7 +53,7 @@ export class FigmaPilotError extends Error {
 
   constructor(code: ErrorCode, message: string, details?: Record<string, unknown>) {
     super(message);
-    this.name = "FigmaPilotError";
+    this.name = 'FigmaPilotError';
     this.code = code;
     this.details = details;
   }
@@ -71,36 +71,36 @@ export class FigmaPilotError extends Error {
  * Error messages by code
  */
 const errorMessages: Record<ErrorCode, string> = {
-  [ErrorCode.NOT_CONNECTED]: "Not connected to Figma. Use pilot_connect first.",
-  [ErrorCode.CONNECTION_FAILED]: "Failed to connect to Figma plugin.",
-  [ErrorCode.CONNECTION_TIMEOUT]: "Connection to Figma timed out.",
-  [ErrorCode.CHANNEL_NOT_FOUND]: "Channel not found. Make sure the Figma plugin is running.",
-  [ErrorCode.WEBSOCKET_ERROR]: "WebSocket communication error.",
+  [ErrorCode.NOT_CONNECTED]: 'Not connected to Figma. Use pilot_connect first.',
+  [ErrorCode.CONNECTION_FAILED]: 'Failed to connect to Figma plugin.',
+  [ErrorCode.CONNECTION_TIMEOUT]: 'Connection to Figma timed out.',
+  [ErrorCode.CHANNEL_NOT_FOUND]: 'Channel not found. Make sure the Figma plugin is running.',
+  [ErrorCode.WEBSOCKET_ERROR]: 'WebSocket communication error.',
 
-  [ErrorCode.NODE_NOT_FOUND]: "Node not found.",
-  [ErrorCode.INVALID_NODE_TYPE]: "Invalid node type for this operation.",
-  [ErrorCode.NODE_LOCKED]: "Node is locked and cannot be modified.",
-  [ErrorCode.NODE_NOT_EDITABLE]: "Node is not editable.",
-  [ErrorCode.PARENT_NOT_FOUND]: "Parent node not found.",
+  [ErrorCode.NODE_NOT_FOUND]: 'Node not found.',
+  [ErrorCode.INVALID_NODE_TYPE]: 'Invalid node type for this operation.',
+  [ErrorCode.NODE_LOCKED]: 'Node is locked and cannot be modified.',
+  [ErrorCode.NODE_NOT_EDITABLE]: 'Node is not editable.',
+  [ErrorCode.PARENT_NOT_FOUND]: 'Parent node not found.',
 
-  [ErrorCode.UNKNOWN_COMMAND]: "Unknown command.",
-  [ErrorCode.INVALID_PARAMS]: "Invalid parameters.",
-  [ErrorCode.COMMAND_TIMEOUT]: "Command timed out.",
-  [ErrorCode.COMMAND_FAILED]: "Command execution failed.",
-  [ErrorCode.BATCH_PARTIAL_FAILURE]: "Some batch commands failed.",
+  [ErrorCode.UNKNOWN_COMMAND]: 'Unknown command.',
+  [ErrorCode.INVALID_PARAMS]: 'Invalid parameters.',
+  [ErrorCode.COMMAND_TIMEOUT]: 'Command timed out.',
+  [ErrorCode.COMMAND_FAILED]: 'Command execution failed.',
+  [ErrorCode.BATCH_PARTIAL_FAILURE]: 'Some batch commands failed.',
 
-  [ErrorCode.READ_NOT_ALLOWED]: "Read operations not allowed in write-only mode.",
-  [ErrorCode.WRITE_NOT_ALLOWED]: "Write operations not allowed.",
-  [ErrorCode.FEATURE_DISABLED]: "This feature is disabled.",
+  [ErrorCode.READ_NOT_ALLOWED]: 'Read operations not allowed in write-only mode.',
+  [ErrorCode.WRITE_NOT_ALLOWED]: 'Write operations not allowed.',
+  [ErrorCode.FEATURE_DISABLED]: 'This feature is disabled.',
 
-  [ErrorCode.FONT_NOT_FOUND]: "Font not found or not loaded.",
-  [ErrorCode.STYLE_NOT_FOUND]: "Style not found.",
-  [ErrorCode.COMPONENT_NOT_FOUND]: "Component not found.",
-  [ErrorCode.VARIABLE_NOT_FOUND]: "Variable not found.",
-  [ErrorCode.IMAGE_LOAD_FAILED]: "Failed to load image.",
+  [ErrorCode.FONT_NOT_FOUND]: 'Font not found or not loaded.',
+  [ErrorCode.STYLE_NOT_FOUND]: 'Style not found.',
+  [ErrorCode.COMPONENT_NOT_FOUND]: 'Component not found.',
+  [ErrorCode.VARIABLE_NOT_FOUND]: 'Variable not found.',
+  [ErrorCode.IMAGE_LOAD_FAILED]: 'Failed to load image.',
 
-  [ErrorCode.PLUGIN_ERROR]: "Figma plugin error.",
-  [ErrorCode.PLUGIN_NOT_RUNNING]: "Figma plugin is not running.",
+  [ErrorCode.PLUGIN_ERROR]: 'Figma plugin error.',
+  [ErrorCode.PLUGIN_NOT_RUNNING]: 'Figma plugin is not running.',
 };
 
 /**
@@ -109,7 +109,7 @@ const errorMessages: Record<ErrorCode, string> = {
 export function createError(
   code: ErrorCode,
   customMessage?: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
 ): FigmaPilotError {
   const message = customMessage || errorMessages[code];
   return new FigmaPilotError(code, message, details);
@@ -121,37 +121,41 @@ export function createError(
 export function parsePluginError(errorMessage: string): FigmaPilotError {
   const lowerMessage = errorMessage.toLowerCase();
 
-  if (lowerMessage.includes("not found")) {
-    if (lowerMessage.includes("node")) {
+  if (lowerMessage.includes('not found')) {
+    if (lowerMessage.includes('node')) {
       return createError(ErrorCode.NODE_NOT_FOUND, errorMessage);
     }
-    if (lowerMessage.includes("font")) {
+    if (lowerMessage.includes('font')) {
       return createError(ErrorCode.FONT_NOT_FOUND, errorMessage);
     }
-    if (lowerMessage.includes("style")) {
+    if (lowerMessage.includes('style')) {
       return createError(ErrorCode.STYLE_NOT_FOUND, errorMessage);
     }
-    if (lowerMessage.includes("component")) {
+    if (lowerMessage.includes('component')) {
       return createError(ErrorCode.COMPONENT_NOT_FOUND, errorMessage);
     }
-    if (lowerMessage.includes("variable")) {
+    if (lowerMessage.includes('variable')) {
       return createError(ErrorCode.VARIABLE_NOT_FOUND, errorMessage);
     }
   }
 
-  if (lowerMessage.includes("timeout")) {
+  if (lowerMessage.includes('timeout')) {
     return createError(ErrorCode.COMMAND_TIMEOUT, errorMessage);
   }
 
-  if (lowerMessage.includes("locked")) {
+  if (lowerMessage.includes('locked')) {
     return createError(ErrorCode.NODE_LOCKED, errorMessage);
   }
 
-  if (lowerMessage.includes("not a frame") || lowerMessage.includes("not a text") || lowerMessage.includes("not an instance")) {
+  if (
+    lowerMessage.includes('not a frame') ||
+    lowerMessage.includes('not a text') ||
+    lowerMessage.includes('not an instance')
+  ) {
     return createError(ErrorCode.INVALID_NODE_TYPE, errorMessage);
   }
 
-  if (lowerMessage.includes("unknown command")) {
+  if (lowerMessage.includes('unknown command')) {
     return createError(ErrorCode.UNKNOWN_COMMAND, errorMessage);
   }
 
