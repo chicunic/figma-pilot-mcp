@@ -3,20 +3,29 @@ import { type ZodRawShape, z } from 'zod';
 import { formatErrorResponse, parsePluginError } from '../utils/errors.ts';
 import { sendCommand } from '../utils/websocket.ts';
 
-// Tool definition
+// ==================== Types ====================
+
+type TransformFn = (params: Record<string, unknown>) => Record<string, unknown>;
+
 export interface ToolDef {
   name: string;
   description: string;
   schema: z.ZodObject<ZodRawShape>;
   command: string;
   type: 'read' | 'write';
-  // Optional: parameter transform function
-  transform?: (params: Record<string, unknown>) => Record<string, unknown>;
-  // Whether batch node operations are supported (automatically changes nodeId to nodeIds)
+  transform?: TransformFn;
   supportsBatch?: boolean;
 }
 
-// Pick specified fields from object
+interface BatchResult {
+  success: boolean;
+  results: unknown[];
+  errors?: string[];
+  count: { total: number; success: number; failed: number };
+}
+
+// ==================== Helpers ====================
+
 function pickFields(obj: Record<string, unknown>, fields: string[]): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   for (const field of fields) {
@@ -27,86 +36,83 @@ function pickFields(obj: Record<string, unknown>, fields: string[]): Record<stri
   return result;
 }
 
-// Register single tool
-export function registerTool(server: McpServer, tool: ToolDef) {
-  // Build extended schema
-  const extendedShape = { ...tool.schema.shape } as Record<string, z.ZodTypeAny>;
+async function executeBatchOperation(
+  tool: ToolDef,
+  nodeIds: string[],
+  restParams: Record<string, unknown>,
+): Promise<BatchResult> {
+  const results: unknown[] = [];
+  const errors: string[] = [];
 
-  // Add fields parameter
+  for (const nodeId of nodeIds) {
+    const singleParams = { ...restParams, nodeId };
+    const transformedParams = tool.transform ? tool.transform(singleParams) : singleParams;
+    try {
+      const result = await sendCommand(tool.command, transformedParams);
+      if (result.success) {
+        results.push(result.result);
+      } else {
+        errors.push(`${nodeId}: ${result.error}`);
+      }
+    } catch (err) {
+      errors.push(`${nodeId}: ${(err as Error).message}`);
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    results,
+    errors: errors.length > 0 ? errors : undefined,
+    count: { total: nodeIds.length, success: results.length, failed: errors.length },
+  };
+}
+
+function buildExtendedSchema(tool: ToolDef): Record<string, z.ZodTypeAny> {
+  const extendedShape = { ...tool.schema.shape } as Record<string, z.ZodTypeAny>;
   extendedShape.fields = z.array(z.string()).optional().describe('Fields to return (reduces response size)');
 
-  // If batch operations supported and has nodeId field, replace with array-supporting version
   if (tool.supportsBatch && 'nodeId' in tool.schema.shape) {
     extendedShape.nodeId = z
       .union([z.string(), z.array(z.string())])
       .describe('Target node ID(s) - single string or array');
   }
 
-  server.tool(tool.name, tool.description, extendedShape, async (params) => {
-    const { fields, ...restParams } = params as Record<string, unknown> & { fields?: string[] };
+  return extendedShape;
+}
 
-    // Check if this is a batch node operation
+// ==================== Registration ====================
+
+export function registerTool(server: McpServer, tool: ToolDef): void {
+  const extendedShape = buildExtendedSchema(tool);
+
+  server.registerTool(tool.name, { description: tool.description, inputSchema: extendedShape }, async (params) => {
+    const { fields, ...restParams } = params as Record<string, unknown> & { fields?: string[] };
     const nodeIdValue = restParams.nodeId;
     const isBatchNodes = tool.supportsBatch && Array.isArray(nodeIdValue);
 
     if (isBatchNodes) {
-      // Batch node operation: execute command for each nodeId
       const nodeIds = nodeIdValue as string[];
-      const results: unknown[] = [];
-      const errors: string[] = [];
-
-      for (const nodeId of nodeIds) {
-        const singleParams = { ...restParams, nodeId };
-        const transformedParams = tool.transform ? tool.transform(singleParams) : singleParams;
-        try {
-          const result = await sendCommand(tool.command, transformedParams);
-          if (result.success) {
-            results.push(result.result);
-          } else {
-            errors.push(`${nodeId}: ${result.error}`);
-          }
-        } catch (err) {
-          errors.push(`${nodeId}: ${(err as Error).message}`);
-        }
-      }
-
-      const responseData = {
-        success: errors.length === 0,
-        results,
-        errors: errors.length > 0 ? errors : undefined,
-        count: { total: nodeIds.length, success: results.length, failed: errors.length },
-      };
-
+      const responseData = await executeBatchOperation(tool, nodeIds, restParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(responseData) }],
-        isError: errors.length === nodeIds.length, // Only count as error if all failed
+        isError: nodeIds.length > 0 && responseData.count.success === 0,
       };
     }
 
-    // Single node operation
     try {
       const transformedParams = tool.transform ? tool.transform(restParams) : restParams;
       const result = await sendCommand(tool.command, transformedParams);
 
-      // If command failed, parse the error
       if (!result.success && result.error) {
         const pilotError = parsePluginError(result.error);
         return {
           content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                error: true,
-                code: pilotError.code,
-                message: pilotError.message,
-              }),
-            },
+            { type: 'text', text: JSON.stringify({ error: true, code: pilotError.code, message: pilotError.message }) },
           ],
           isError: true,
         };
       }
 
-      // If fields specified, only return specified fields
       let responseData = result;
       if (fields && fields.length > 0 && result.result && typeof result.result === 'object') {
         responseData = {
@@ -128,8 +134,7 @@ export function registerTool(server: McpServer, tool: ToolDef) {
   });
 }
 
-// Batch register tools
-export function registerToolsFromDefs(server: McpServer, tools: ToolDef[]) {
+export function registerToolsFromDefs(server: McpServer, tools: ToolDef[]): void {
   for (const tool of tools) {
     registerTool(server, tool);
   }

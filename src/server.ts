@@ -7,47 +7,29 @@ import { registerTools } from './tools/index.ts';
 import { logger } from './utils/logger.ts';
 import { startWebSocketServer } from './utils/websocket.ts';
 
-async function main() {
-  logger.info(`Starting ${SERVER_NAME} v${SERVER_VERSION}`);
+interface WebSocketServer {
+  stop(): void;
+}
 
-  // Start built-in WebSocket server
-  const wsServer = startWebSocketServer();
-
-  // Create MCP server
-  const server = new McpServer({
-    name: SERVER_NAME,
-    version: SERVER_VERSION,
-  });
-
-  // Register all tools
-  registerTools(server);
-
-  // Register all prompts
-  registerPrompts(server);
-
-  // Use stdio transport
-  const transport = new StdioServerTransport();
-
-  // Graceful shutdown
+function setupShutdownHandlers(wsServer: WebSocketServer): void {
   let isShuttingDown = false;
-  const cleanup = (reason: string, exitCode = 0) => {
+
+  function cleanup(reason: string, exitCode = 0): void {
     if (isShuttingDown) return;
     isShuttingDown = true;
     logger.info(`Shutting down (${reason})...`);
     wsServer.stop();
     process.exit(exitCode);
-  };
+  }
 
-  // Handle process exit signals
-  process.on('SIGINT', () => cleanup('SIGINT'));
-  process.on('SIGTERM', () => cleanup('SIGTERM'));
-  process.on('SIGHUP', () => cleanup('SIGHUP'));
+  const signals = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+  for (const signal of signals) {
+    process.on(signal, () => cleanup(signal));
+  }
 
-  // Handle stdin close (when parent process exits)
   process.stdin.on('close', () => cleanup('stdin close'));
   process.stdin.on('end', () => cleanup('stdin end'));
 
-  // Handle uncaught errors
   process.on('uncaughtException', (error) => {
     logger.error('Uncaught exception', error);
     cleanup('uncaughtException', 1);
@@ -57,8 +39,24 @@ async function main() {
     logger.error('Unhandled rejection', reason);
     cleanup('unhandledRejection', 1);
   });
+}
 
-  // Connect server
+async function main(): Promise<void> {
+  logger.info(`Starting ${SERVER_NAME} v${SERVER_VERSION}`);
+
+  const wsServer = startWebSocketServer();
+
+  const server = new McpServer({
+    name: SERVER_NAME,
+    version: SERVER_VERSION,
+  });
+
+  registerTools(server);
+  registerPrompts(server);
+
+  setupShutdownHandlers(wsServer);
+
+  const transport = new StdioServerTransport();
   await server.connect(transport);
 
   logger.info('MCP server started successfully');

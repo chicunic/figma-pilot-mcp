@@ -8,8 +8,8 @@
     "start": "bun run src/server.ts",
     "build": "bunx esbuild src/plugin/code.ts --bundle --outfile=dist/plugin/code.js --target=es2018 --format=iife && cp src/plugin/manifest.json src/plugin/ui.html dist/plugin/",
     "typecheck": "tsc --noEmit && tsc -p src/plugin/tsconfig.json",
-    "check": "biome check src --write",
-    "format": "biome format src --write"
+    "lint": "biome check src",
+    "lint:fix": "biome check src --write"
   },
   "keywords": [
     "figma",

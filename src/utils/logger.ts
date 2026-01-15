@@ -1,17 +1,22 @@
-// MCP uses stdio communication, logs output to stderr
-const log = (level: string, message: string, data?: unknown) => {
+type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
+
+function log(level: LogLevel, message: string, data?: unknown): void {
   const timestamp = new Date().toISOString();
-  const logLine = data
-    ? `[${timestamp}] [${level}] ${message} ${JSON.stringify(data)}`
-    : `[${timestamp}] [${level}] ${message}`;
-  console.error(logLine);
-};
+  const suffix = data ? ` ${JSON.stringify(data)}` : '';
+  console.error(`[${timestamp}] [${level}] ${message}${suffix}`);
+}
 
 export const logger = {
-  info: (message: string, data?: unknown) => log('INFO', message, data),
-  warn: (message: string, data?: unknown) => log('WARN', message, data),
-  error: (message: string, data?: unknown) => log('ERROR', message, data),
-  debug: (message: string, data?: unknown) => {
+  info(message: string, data?: unknown): void {
+    log('INFO', message, data);
+  },
+  warn(message: string, data?: unknown): void {
+    log('WARN', message, data);
+  },
+  error(message: string, data?: unknown): void {
+    log('ERROR', message, data);
+  },
+  debug(message: string, data?: unknown): void {
     if (process.env.DEBUG) {
       log('DEBUG', message, data);
     }

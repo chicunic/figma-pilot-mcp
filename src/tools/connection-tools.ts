@@ -3,59 +3,35 @@ import { z } from 'zod';
 import { connectToFigma, disconnect, getChannel, getWebSocketUrl, isConnected } from '../utils/websocket.ts';
 
 export function registerConnectionTools(server: McpServer): void {
-  // Connect to Figma
-  server.tool(
+  server.registerTool(
     'pilot_connect',
-    'Connect to Figma plugin via WebSocket. Required before other operations.',
     {
-      channel: z.string().describe("Channel name (e.g., 'figma-pilot-xxx')"),
+      description: 'Connect to Figma plugin via WebSocket. Required before other operations.',
+      inputSchema: { channel: z.string().describe("Channel name (e.g., 'figma-pilot-xxx')") },
     },
-    async ({ channel }) => {
-      try {
-        await connectToFigma(channel);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Connected to Figma on channel: ${channel}`,
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Failed to connect: ${error instanceof Error ? error.message : String(error)}`,
-            },
-          ],
-          isError: true,
-        };
-      }
+    ({ channel }) => {
+      connectToFigma(channel);
+      return {
+        content: [{ type: 'text', text: `Connected to Figma on channel: ${channel}` }],
+      };
     },
   );
 
-  // Disconnect
-  server.tool('pilot_disconnect', 'Disconnect from Figma plugin.', {}, async () => {
+  server.registerTool('pilot_disconnect', { description: 'Disconnect from Figma plugin.' }, () => {
     disconnect();
     return {
       content: [{ type: 'text', text: 'Disconnected from Figma' }],
     };
   });
 
-  // Get connection status
-  server.tool('pilot_status', 'Get WebSocket connection status.', {}, async () => {
-    const connected = isConnected();
-    const channel = getChannel();
-    const url = getWebSocketUrl();
-
+  server.registerTool('pilot_status', { description: 'Get WebSocket connection status.' }, () => {
+    const status = {
+      connected: isConnected(),
+      channel: getChannel(),
+      url: getWebSocketUrl(),
+    };
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({ connected, channel, url }, null, 2),
-        },
-      ],
+      content: [{ type: 'text', text: JSON.stringify(status, null, 2) }],
     };
   });
 }

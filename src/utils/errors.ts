@@ -1,7 +1,3 @@
-/**
- * Figma Pilot Error Codes and Handling
- */
-
 export enum ErrorCode {
   // Connection errors (1xxx)
   NOT_CONNECTED = 1001,
@@ -67,9 +63,6 @@ export class FigmaPilotError extends Error {
   }
 }
 
-/**
- * Error messages by code
- */
 const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.NOT_CONNECTED]: 'Not connected to Figma. Use pilot_connect first.',
   [ErrorCode.CONNECTION_FAILED]: 'Failed to connect to Figma plugin.',
@@ -103,9 +96,6 @@ const errorMessages: Record<ErrorCode, string> = {
   [ErrorCode.PLUGIN_NOT_RUNNING]: 'Figma plugin is not running.',
 };
 
-/**
- * Create a FigmaPilotError with optional custom message
- */
 export function createError(
   code: ErrorCode,
   customMessage?: string,
@@ -115,56 +105,43 @@ export function createError(
   return new FigmaPilotError(code, message, details);
 }
 
-/**
- * Parse error from plugin response
- */
+const NOT_FOUND_PATTERNS: Array<[string, ErrorCode]> = [
+  ['node', ErrorCode.NODE_NOT_FOUND],
+  ['font', ErrorCode.FONT_NOT_FOUND],
+  ['style', ErrorCode.STYLE_NOT_FOUND],
+  ['component', ErrorCode.COMPONENT_NOT_FOUND],
+  ['variable', ErrorCode.VARIABLE_NOT_FOUND],
+];
+
+const ERROR_PATTERNS: Array<[string, ErrorCode]> = [
+  ['timeout', ErrorCode.COMMAND_TIMEOUT],
+  ['locked', ErrorCode.NODE_LOCKED],
+  ['not a frame', ErrorCode.INVALID_NODE_TYPE],
+  ['not a text', ErrorCode.INVALID_NODE_TYPE],
+  ['not an instance', ErrorCode.INVALID_NODE_TYPE],
+  ['unknown command', ErrorCode.UNKNOWN_COMMAND],
+];
+
 export function parsePluginError(errorMessage: string): FigmaPilotError {
   const lowerMessage = errorMessage.toLowerCase();
 
   if (lowerMessage.includes('not found')) {
-    if (lowerMessage.includes('node')) {
-      return createError(ErrorCode.NODE_NOT_FOUND, errorMessage);
-    }
-    if (lowerMessage.includes('font')) {
-      return createError(ErrorCode.FONT_NOT_FOUND, errorMessage);
-    }
-    if (lowerMessage.includes('style')) {
-      return createError(ErrorCode.STYLE_NOT_FOUND, errorMessage);
-    }
-    if (lowerMessage.includes('component')) {
-      return createError(ErrorCode.COMPONENT_NOT_FOUND, errorMessage);
-    }
-    if (lowerMessage.includes('variable')) {
-      return createError(ErrorCode.VARIABLE_NOT_FOUND, errorMessage);
+    for (const [keyword, code] of NOT_FOUND_PATTERNS) {
+      if (lowerMessage.includes(keyword)) {
+        return createError(code, errorMessage);
+      }
     }
   }
 
-  if (lowerMessage.includes('timeout')) {
-    return createError(ErrorCode.COMMAND_TIMEOUT, errorMessage);
-  }
-
-  if (lowerMessage.includes('locked')) {
-    return createError(ErrorCode.NODE_LOCKED, errorMessage);
-  }
-
-  if (
-    lowerMessage.includes('not a frame') ||
-    lowerMessage.includes('not a text') ||
-    lowerMessage.includes('not an instance')
-  ) {
-    return createError(ErrorCode.INVALID_NODE_TYPE, errorMessage);
-  }
-
-  if (lowerMessage.includes('unknown command')) {
-    return createError(ErrorCode.UNKNOWN_COMMAND, errorMessage);
+  for (const [pattern, code] of ERROR_PATTERNS) {
+    if (lowerMessage.includes(pattern)) {
+      return createError(code, errorMessage);
+    }
   }
 
   return createError(ErrorCode.COMMAND_FAILED, errorMessage);
 }
 
-/**
- * Format error for MCP response
- */
 export function formatErrorResponse(error: unknown): string {
   if (error instanceof FigmaPilotError) {
     return JSON.stringify({
