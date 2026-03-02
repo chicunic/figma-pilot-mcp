@@ -3,62 +3,128 @@ import { z } from 'zod';
 import { colorSchema, parseColor, type RGBAInput } from '../utils/color.ts';
 import { registerToolsFromDefs, type ToolDef } from './registry.ts';
 
+const gradientStopSchema = z.object({
+  position: z.number().min(0).max(1).describe('Stop position (0-1)'),
+  color: z
+    .object({
+      r: z.number().min(0).max(1).describe('Red (0-1)'),
+      g: z.number().min(0).max(1).describe('Green (0-1)'),
+      b: z.number().min(0).max(1).describe('Blue (0-1)'),
+      a: z.number().min(0).max(1).optional().describe('Alpha (0-1)'),
+    })
+    .describe('Stop color'),
+});
+
+const gradientTypeSchema = z
+  .enum(['GRADIENT_LINEAR', 'GRADIENT_RADIAL', 'GRADIENT_ANGULAR', 'GRADIENT_DIAMOND'])
+  .describe('Gradient type');
+
+const imageFiltersSchema = z
+  .object({
+    exposure: z.number().min(-1).max(1).optional().describe('Exposure (-1 to 1)'),
+    contrast: z.number().min(-1).max(1).optional().describe('Contrast (-1 to 1)'),
+    saturation: z.number().min(-1).max(1).optional().describe('Saturation (-1 to 1)'),
+    temperature: z.number().min(-1).max(1).optional().describe('Temperature (-1 to 1)'),
+    tint: z.number().min(-1).max(1).optional().describe('Tint (-1 to 1)'),
+    highlights: z.number().min(-1).max(1).optional().describe('Highlights (-1 to 1)'),
+    shadows: z.number().min(-1).max(1).optional().describe('Shadows (-1 to 1)'),
+  })
+  .describe('Image filters');
+
 const tools: ToolDef[] = [
   // ==================== Basic Modifications ====================
   {
     name: 'pilot_set_fill',
-    description: 'Set fill color. Accepts HEX or RGBA. Supports batch. [WRITE]',
+    description: 'Set fill: solid color or gradient [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      color: colorSchema.describe("Color: '#FF0000' or {r,g,b,a}"),
+      nodeId: z.string().describe('Node ID'),
+      color: colorSchema.optional().describe("Solid color: '#FF0000' or {r,g,b,a}"),
+      gradientType: gradientTypeSchema.optional(),
+      gradientStops: z.array(gradientStopSchema).optional().describe('Gradient color stops'),
+      gradientTransform: z.array(z.array(z.number())).optional().describe('2x3 transform matrix'),
     }),
-    command: 'set_fill_color',
+    commandResolver: (params) => {
+      if (params.gradientType) {
+        return {
+          command: 'set_gradient_fill',
+          params: {
+            nodeId: params.nodeId,
+            gradientType: params.gradientType,
+            gradientStops: params.gradientStops,
+            gradientTransform: params.gradientTransform,
+          },
+        };
+      }
+      return {
+        command: 'set_fill_color',
+        params: {
+          nodeId: params.nodeId,
+          ...parseColor(params.color as string | RGBAInput),
+        },
+      };
+    },
     type: 'write',
     supportsBatch: true,
-    transform: (params) => ({
-      nodeId: params.nodeId,
-      ...parseColor(params.color as string | RGBAInput),
-    }),
   },
   {
     name: 'pilot_set_stroke',
-    description: 'Set stroke color. Accepts HEX or RGBA. Supports batch. [WRITE]',
+    description: 'Set stroke: solid color or gradient [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      color: colorSchema.describe("Color: '#FF0000' or {r,g,b,a}"),
-      strokeWeight: z.number().default(1).describe('Stroke weight (px)'),
+      nodeId: z.string().describe('Node ID'),
+      color: colorSchema.optional().describe("Solid color: '#FF0000' or {r,g,b,a}"),
+      strokeWeight: z.number().default(1).describe('Weight (px)'),
+      gradientType: gradientTypeSchema.optional(),
+      gradientStops: z.array(gradientStopSchema).optional().describe('Gradient color stops'),
+      gradientTransform: z.array(z.array(z.number())).optional().describe('2x3 transform matrix'),
     }),
-    command: 'set_stroke_color',
+    commandResolver: (params) => {
+      if (params.gradientType) {
+        return {
+          command: 'set_gradient_stroke',
+          params: {
+            nodeId: params.nodeId,
+            gradientType: params.gradientType,
+            gradientStops: params.gradientStops,
+            gradientTransform: params.gradientTransform,
+            strokeWeight: params.strokeWeight,
+          },
+        };
+      }
+      return {
+        command: 'set_stroke_color',
+        params: {
+          nodeId: params.nodeId,
+          ...parseColor(params.color as string | RGBAInput),
+          strokeWeight: params.strokeWeight,
+        },
+      };
+    },
     type: 'write',
     supportsBatch: true,
-    transform: (params) => ({
-      nodeId: params.nodeId,
-      ...parseColor(params.color as string | RGBAInput),
-      strokeWeight: params.strokeWeight,
-    }),
   },
+
+  // ==================== Corners (merged 2→1) ====================
   {
-    name: 'pilot_set_corner_radius',
-    description: 'Set corner radius. Supports batch. [WRITE]',
+    name: 'pilot_set_corners',
+    description: 'Set corner radius (uniform or individual) [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      radius: z.number().min(0).describe('Corner radius (px)'),
+      nodeId: z.string().describe('Node ID'),
+      radius: z.number().min(0).optional().describe('Uniform radius'),
+      topLeft: z.number().min(0).optional().describe('Top-left'),
+      topRight: z.number().min(0).optional().describe('Top-right'),
+      bottomLeft: z.number().min(0).optional().describe('Bottom-left'),
+      bottomRight: z.number().min(0).optional().describe('Bottom-right'),
     }),
-    command: 'set_corner_radius',
-    type: 'write',
-    supportsBatch: true,
-  },
-  {
-    name: 'pilot_set_individual_corners',
-    description: 'Set individual corner radii. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      topLeft: z.number().min(0).optional().describe('Top-left radius'),
-      topRight: z.number().min(0).optional().describe('Top-right radius'),
-      bottomLeft: z.number().min(0).optional().describe('Bottom-left radius'),
-      bottomRight: z.number().min(0).optional().describe('Bottom-right radius'),
-    }),
-    command: 'set_individual_corner_radius',
+    commandResolver: (params) => {
+      const { nodeId, radius, topLeft, topRight, bottomLeft, bottomRight } = params as Record<string, unknown>;
+      if (radius !== undefined) {
+        return { command: 'set_corner_radius', params: { nodeId, radius } };
+      }
+      return {
+        command: 'set_individual_corner_radius',
+        params: { nodeId, topLeft, topRight, bottomLeft, bottomRight },
+      };
+    },
     type: 'write',
     supportsBatch: true,
   },
@@ -66,20 +132,20 @@ const tools: ToolDef[] = [
   // ==================== Position and Size ====================
   {
     name: 'pilot_move_node',
-    description: 'Move node to position. [WRITE]',
+    description: 'Move node to position [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      x: z.number().describe('X position'),
-      y: z.number().describe('Y position'),
+      nodeId: z.string().describe('Node ID'),
+      x: z.number().describe('X'),
+      y: z.number().describe('Y'),
     }),
     command: 'move_node',
     type: 'write',
   },
   {
     name: 'pilot_resize_node',
-    description: 'Resize a node. Supports batch. [WRITE]',
+    description: 'Resize node [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
+      nodeId: z.string().describe('Node ID'),
       width: z.number().min(0).describe('Width'),
       height: z.number().min(0).describe('Height'),
     }),
@@ -89,10 +155,10 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_rotation',
-    description: 'Set node rotation. Supports batch. [WRITE]',
+    description: 'Set rotation [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      rotation: z.number().describe('Rotation angle (degrees)'),
+      nodeId: z.string().describe('Node ID'),
+      rotation: z.number().describe('Degrees'),
     }),
     command: 'set_rotation',
     type: 'write',
@@ -102,9 +168,9 @@ const tools: ToolDef[] = [
   // ==================== Appearance ====================
   {
     name: 'pilot_set_opacity',
-    description: 'Set node opacity. Supports batch. [WRITE]',
+    description: 'Set opacity [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
+      nodeId: z.string().describe('Node ID'),
       opacity: z.number().min(0).max(1).describe('Opacity (0-1)'),
     }),
     command: 'set_opacity',
@@ -113,9 +179,9 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_blend_mode',
-    description: 'Set blend mode. Supports batch. [WRITE]',
+    description: 'Set blend mode [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
+      nodeId: z.string().describe('Node ID'),
       blendMode: z
         .enum([
           'PASS_THROUGH',
@@ -146,10 +212,10 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_visible',
-    description: 'Set node visibility. Supports batch. [WRITE]',
+    description: 'Set visibility [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      visible: z.boolean().describe('Visibility'),
+      nodeId: z.string().describe('Node ID'),
+      visible: z.boolean().describe('Visible'),
     }),
     command: 'set_visible',
     type: 'write',
@@ -157,10 +223,10 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_locked',
-    description: 'Set node locked state. Supports batch. [WRITE]',
+    description: 'Set locked state [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      locked: z.boolean().describe('Locked state'),
+      nodeId: z.string().describe('Node ID'),
+      locked: z.boolean().describe('Locked'),
     }),
     command: 'set_locked',
     type: 'write',
@@ -168,53 +234,63 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_name',
-    description: 'Set node name. [WRITE]',
+    description: 'Set node name [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      name: z.string().describe('New name'),
+      nodeId: z.string().describe('Node ID'),
+      name: z.string().describe('Name'),
     }),
     command: 'set_name',
     type: 'write',
   },
 
-  // ==================== Effects ====================
+  // ==================== Effects (merged 3→1) ====================
   {
-    name: 'pilot_add_drop_shadow',
-    description: 'Add drop shadow effect. Supports batch. [WRITE]',
+    name: 'pilot_set_effect',
+    description: 'Add shadow/blur or clear effects [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      r: z.number().default(0).describe('Shadow color R (0-1)'),
-      g: z.number().default(0).describe('Shadow color G (0-1)'),
-      b: z.number().default(0).describe('Shadow color B (0-1)'),
-      a: z.number().default(0.25).describe('Shadow opacity (0-1)'),
-      offsetX: z.number().default(0).describe('X offset'),
-      offsetY: z.number().default(4).describe('Y offset'),
-      radius: z.number().default(4).describe('Blur radius'),
-      spread: z.number().default(0).describe('Spread'),
+      nodeId: z.string().describe('Node ID'),
+      action: z.enum(['ADD_SHADOW', 'ADD_BLUR', 'CLEAR']).describe('Effect action'),
+      // Shadow params
+      r: z.number().optional().describe('Shadow R (0-1)'),
+      g: z.number().optional().describe('Shadow G (0-1)'),
+      b: z.number().optional().describe('Shadow B (0-1)'),
+      a: z.number().optional().describe('Shadow opacity (0-1)'),
+      offsetX: z.number().optional().describe('Shadow X offset'),
+      offsetY: z.number().optional().describe('Shadow Y offset'),
+      radius: z.number().optional().describe('Blur/shadow radius'),
+      spread: z.number().optional().describe('Shadow spread'),
+      // Blur params
+      blurType: z.enum(['LAYER_BLUR', 'BACKGROUND_BLUR']).optional().describe('Blur type'),
     }),
-    command: 'add_drop_shadow',
-    type: 'write',
-    supportsBatch: true,
-  },
-  {
-    name: 'pilot_add_blur',
-    description: 'Add blur effect. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      type: z.enum(['LAYER_BLUR', 'BACKGROUND_BLUR']).default('LAYER_BLUR').describe('Blur type'),
-      radius: z.number().default(10).describe('Blur radius'),
-    }),
-    command: 'add_blur',
-    type: 'write',
-    supportsBatch: true,
-  },
-  {
-    name: 'pilot_clear_effects',
-    description: 'Clear all effects from node. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-    }),
-    command: 'clear_effects',
+    commandResolver: (params) => {
+      const { action, nodeId, ...rest } = params as Record<string, unknown>;
+      switch (action) {
+        case 'ADD_SHADOW':
+          return {
+            command: 'add_drop_shadow',
+            params: {
+              nodeId,
+              r: rest.r ?? 0,
+              g: rest.g ?? 0,
+              b: rest.b ?? 0,
+              a: rest.a ?? 0.25,
+              offsetX: rest.offsetX ?? 0,
+              offsetY: rest.offsetY ?? 4,
+              radius: rest.radius ?? 4,
+              spread: rest.spread ?? 0,
+            },
+          };
+        case 'ADD_BLUR':
+          return {
+            command: 'add_blur',
+            params: { nodeId, type: rest.blurType ?? 'LAYER_BLUR', radius: rest.radius ?? 10 },
+          };
+        case 'CLEAR':
+          return { command: 'clear_effects', params: { nodeId } };
+        default:
+          return { command: 'clear_effects', params: { nodeId } };
+      }
+    },
     type: 'write',
     supportsBatch: true,
   },
@@ -222,10 +298,10 @@ const tools: ToolDef[] = [
   // ==================== Layout ====================
   {
     name: 'pilot_set_auto_layout',
-    description: 'Set auto layout on a frame. Supports batch. [WRITE]',
+    description: 'Set auto layout on frame [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target frame ID'),
-      mode: z.enum(['HORIZONTAL', 'VERTICAL', 'NONE']).describe('Layout direction'),
+      nodeId: z.string().describe('Frame ID'),
+      mode: z.enum(['HORIZONTAL', 'VERTICAL', 'NONE']).describe('Direction'),
       padding: z
         .object({
           top: z.number().default(0),
@@ -236,16 +312,10 @@ const tools: ToolDef[] = [
         .optional()
         .describe('Padding'),
       itemSpacing: z.number().default(0).describe('Item spacing'),
-      primaryAxisAlignItems: z
-        .enum(['MIN', 'CENTER', 'MAX', 'SPACE_BETWEEN'])
-        .default('MIN')
-        .describe('Main axis alignment'),
-      counterAxisAlignItems: z
-        .enum(['MIN', 'CENTER', 'MAX', 'BASELINE'])
-        .default('MIN')
-        .describe('Cross axis alignment'),
-      primaryAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('Main axis sizing'),
-      counterAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('Cross axis sizing'),
+      primaryAxisAlignItems: z.enum(['MIN', 'CENTER', 'MAX', 'SPACE_BETWEEN']).default('MIN').describe('Main axis'),
+      counterAxisAlignItems: z.enum(['MIN', 'CENTER', 'MAX', 'BASELINE']).default('MIN').describe('Cross axis'),
+      primaryAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('Main sizing'),
+      counterAxisSizingMode: z.enum(['FIXED', 'AUTO']).optional().describe('Cross sizing'),
     }),
     command: 'set_auto_layout',
     type: 'write',
@@ -253,11 +323,11 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_constraints',
-    description: 'Set node constraints. Supports batch. [WRITE]',
+    description: 'Set constraints [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      horizontal: z.enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'SCALE']).default('MIN').describe('Horizontal constraint'),
-      vertical: z.enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'SCALE']).default('MIN').describe('Vertical constraint'),
+      nodeId: z.string().describe('Node ID'),
+      horizontal: z.enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'SCALE']).default('MIN').describe('Horizontal'),
+      vertical: z.enum(['MIN', 'CENTER', 'MAX', 'STRETCH', 'SCALE']).default('MIN').describe('Vertical'),
     }),
     command: 'set_constraints',
     type: 'write',
@@ -267,9 +337,9 @@ const tools: ToolDef[] = [
   // ==================== Node Operations ====================
   {
     name: 'pilot_delete_node',
-    description: 'Delete a node. Supports batch. [WRITE]',
+    description: 'Delete node [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Node ID to delete'),
+      nodeId: z.string().describe('Node ID'),
     }),
     command: 'delete_node',
     type: 'write',
@@ -277,12 +347,12 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_clone_node',
-    description: 'Clone a node. [WRITE]',
+    description: 'Clone node [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Node ID to clone'),
-      x: z.number().optional().describe('New X position'),
-      y: z.number().optional().describe('New Y position'),
-      name: z.string().optional().describe('New name'),
+      nodeId: z.string().describe('Node ID'),
+      x: z.number().optional().describe('X'),
+      y: z.number().optional().describe('Y'),
+      name: z.string().optional().describe('Name'),
     }),
     command: 'clone_node',
     type: 'write',
@@ -291,9 +361,9 @@ const tools: ToolDef[] = [
   // ==================== Grouping ====================
   {
     name: 'pilot_group_nodes',
-    description: 'Group multiple nodes. [WRITE]',
+    description: 'Group nodes [WRITE]',
     schema: z.object({
-      nodeIds: z.array(z.string()).describe('Node IDs to group'),
+      nodeIds: z.array(z.string()).describe('Node IDs'),
       name: z.string().optional().describe('Group name'),
     }),
     command: 'group_nodes',
@@ -301,7 +371,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_ungroup_node',
-    description: 'Ungroup a group node. [WRITE]',
+    description: 'Ungroup node [WRITE]',
     schema: z.object({
       nodeId: z.string().describe('Group node ID'),
     }),
@@ -310,56 +380,38 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_flatten_nodes',
-    description: 'Flatten nodes into single vector. [WRITE]',
+    description: 'Flatten to single vector [WRITE]',
     schema: z.object({
-      nodeIds: z.array(z.string()).describe('Node IDs to flatten'),
+      nodeIds: z.array(z.string()).describe('Node IDs'),
     }),
     command: 'flatten_node',
     type: 'write',
   },
 
-  // ==================== Boolean Operations ====================
+  // ==================== Boolean Operations (merged 4→1) ====================
   {
-    name: 'pilot_boolean_union',
-    description: 'Union multiple nodes. [WRITE]',
+    name: 'pilot_boolean',
+    description: 'Boolean operation on nodes [WRITE]',
     schema: z.object({
-      nodeIds: z.array(z.string()).min(2).describe('Node IDs (at least 2)'),
+      operation: z.enum(['UNION', 'SUBTRACT', 'INTERSECT', 'EXCLUDE']).describe('Operation'),
+      nodeIds: z.array(z.string()).min(2).describe('Node IDs (min 2)'),
     }),
-    command: 'boolean_union',
-    type: 'write',
-  },
-  {
-    name: 'pilot_boolean_subtract',
-    description: 'Subtract nodes (first minus rest). [WRITE]',
-    schema: z.object({
-      nodeIds: z.array(z.string()).min(2).describe('Node IDs (at least 2)'),
-    }),
-    command: 'boolean_subtract',
-    type: 'write',
-  },
-  {
-    name: 'pilot_boolean_intersect',
-    description: 'Intersect multiple nodes. [WRITE]',
-    schema: z.object({
-      nodeIds: z.array(z.string()).min(2).describe('Node IDs (at least 2)'),
-    }),
-    command: 'boolean_intersect',
-    type: 'write',
-  },
-  {
-    name: 'pilot_boolean_exclude',
-    description: 'Exclude overlapping areas. [WRITE]',
-    schema: z.object({
-      nodeIds: z.array(z.string()).min(2).describe('Node IDs (at least 2)'),
-    }),
-    command: 'boolean_exclude',
+    commandResolver: (params) => {
+      const opMap: Record<string, string> = {
+        UNION: 'boolean_union',
+        SUBTRACT: 'boolean_subtract',
+        INTERSECT: 'boolean_intersect',
+        EXCLUDE: 'boolean_exclude',
+      };
+      return { command: opMap[params.operation as string]!, params: { nodeIds: params.nodeIds } };
+    },
     type: 'write',
   },
 
   // ==================== Pages and Viewport ====================
   {
     name: 'pilot_set_current_page',
-    description: 'Set current page. [WRITE]',
+    description: 'Set current page [WRITE]',
     schema: z.object({
       pageId: z.string().describe('Page ID'),
     }),
@@ -368,19 +420,19 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_viewport',
-    description: 'Set viewport center and zoom. [WRITE]',
+    description: 'Set viewport center/zoom [WRITE]',
     schema: z.object({
-      center: z.object({ x: z.number(), y: z.number() }).optional().describe('Viewport center'),
-      zoom: z.number().optional().describe('Zoom level'),
+      center: z.object({ x: z.number(), y: z.number() }).optional().describe('Center'),
+      zoom: z.number().optional().describe('Zoom'),
     }),
     command: 'set_viewport',
     type: 'write',
   },
   {
     name: 'pilot_scroll_to_node',
-    description: 'Scroll viewport to show node. [WRITE]',
+    description: 'Scroll to node [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Node ID to scroll to'),
+      nodeId: z.string().describe('Node ID'),
     }),
     command: 'scroll_to_node',
     type: 'write',
@@ -389,20 +441,22 @@ const tools: ToolDef[] = [
   // ==================== Selection ====================
   {
     name: 'pilot_set_selection',
-    description: 'Set current selection. [WRITE]',
+    description: 'Set selection [WRITE]',
     schema: z.object({
-      nodeIds: z.array(z.string()).describe('Node IDs to select'),
+      nodeIds: z.array(z.string()).describe('Node IDs'),
     }),
     command: 'set_selection',
     type: 'write',
   },
 
-  // ==================== Styles ====================
+  // ==================== Style Create (merged 4→1) ====================
   {
-    name: 'pilot_create_paint_style',
-    description: 'Create a paint style. [WRITE]',
+    name: 'pilot_create_style',
+    description: 'Create paint/text/effect/grid style [WRITE]',
     schema: z.object({
+      styleType: z.enum(['PAINT', 'TEXT', 'EFFECT', 'GRID']).describe('Style type'),
       name: z.string().describe('Style name'),
+      // PAINT specific
       color: z
         .object({
           r: z.number().min(0).max(1),
@@ -411,146 +465,163 @@ const tools: ToolDef[] = [
           a: z.number().min(0).max(1).optional(),
         })
         .optional()
-        .describe('Style color'),
-    }),
-    command: 'create_paint_style',
-    type: 'write',
-  },
-  {
-    name: 'pilot_create_text_style',
-    description: 'Create a text style. [WRITE]',
-    schema: z.object({
-      name: z.string().describe('Style name'),
-      fontFamily: z.string().default('Inter').describe('Font family'),
-      fontStyle: z.string().default('Regular').describe('Font style'),
+        .describe('Paint color'),
+      // TEXT specific
+      fontFamily: z.string().optional().describe('Font family'),
+      fontStyle: z.string().optional().describe('Font style'),
       fontSize: z.number().optional().describe('Font size'),
+      // EFFECT specific
+      effects: z.array(z.record(z.string(), z.unknown())).optional().describe('Effects'),
+      // GRID specific
+      layoutGrids: z.array(z.record(z.string(), z.unknown())).optional().describe('Layout grids'),
     }),
-    command: 'create_text_style',
+    commandResolver: (params) => {
+      const { styleType, name, color, fontFamily, fontStyle, fontSize, effects, layoutGrids } = params as Record<
+        string,
+        unknown
+      >;
+      switch (styleType) {
+        case 'PAINT':
+          return { command: 'create_paint_style', params: { name, color } };
+        case 'TEXT':
+          return {
+            command: 'create_text_style',
+            params: { name, fontFamily: fontFamily ?? 'Inter', fontStyle: fontStyle ?? 'Regular', fontSize },
+          };
+        case 'EFFECT':
+          return { command: 'create_effect_style', params: { name, effects } };
+        case 'GRID':
+          return { command: 'create_grid_style', params: { name, layoutGrids } };
+        default:
+          return { command: 'create_paint_style', params: { name } };
+      }
+    },
     type: 'write',
   },
+
+  // ==================== Style Apply (merged 4→1) ====================
   {
-    name: 'pilot_apply_paint_style',
-    description: 'Apply paint style to node. [WRITE]',
+    name: 'pilot_apply_style',
+    description: 'Apply style to node [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      styleId: z.string().describe('Paint style ID'),
+      styleType: z.enum(['PAINT', 'TEXT', 'EFFECT', 'GRID']).describe('Style type'),
+      nodeId: z.string().describe('Node ID'),
+      styleId: z.string().describe('Style ID'),
     }),
-    command: 'apply_paint_style',
-    type: 'write',
-  },
-  {
-    name: 'pilot_apply_text_style',
-    description: 'Apply text style to text node. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      styleId: z.string().describe('Text style ID'),
-    }),
-    command: 'apply_text_style',
+    commandResolver: (params) => {
+      const cmdMap: Record<string, string> = {
+        PAINT: 'apply_paint_style',
+        TEXT: 'apply_text_style',
+        EFFECT: 'apply_effect_style',
+        GRID: 'apply_grid_style',
+      };
+      return {
+        command: cmdMap[params.styleType as string]!,
+        params: { nodeId: params.nodeId, styleId: params.styleId },
+      };
+    },
     type: 'write',
   },
 
   // ==================== Notifications ====================
   {
     name: 'pilot_notify',
-    description: 'Show notification in Figma. [WRITE]',
+    description: 'Show notification [WRITE]',
     schema: z.object({
-      message: z.string().describe('Notification message'),
-      timeout: z.number().optional().describe('Timeout in ms'),
-      error: z.boolean().optional().describe('Show as error'),
+      message: z.string().describe('Message'),
+      timeout: z.number().optional().describe('Timeout (ms)'),
+      error: z.boolean().optional().describe('Error style'),
     }),
     command: 'notify',
     type: 'write',
   },
 
-  // ==================== Layout Sizing ====================
+  // ==================== Layout Child (merged 4→1) ====================
   {
-    name: 'pilot_set_layout_sizing',
-    description: 'Set layout sizing mode (FILL/HUG/FIXED) for auto-layout children. Supports batch. [WRITE]',
+    name: 'pilot_set_layout_child',
+    description: 'Set layout sizing/align/positioning for child [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      horizontal: z.enum(['FIXED', 'HUG', 'FILL']).optional().describe('Horizontal sizing'),
-      vertical: z.enum(['FIXED', 'HUG', 'FILL']).optional().describe('Vertical sizing'),
-    }),
-    command: 'set_layout_sizing',
-    type: 'write',
-    supportsBatch: true,
-  },
-  {
-    name: 'pilot_set_min_max_size',
-    description: 'Set min/max width/height constraints. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      minWidth: z.number().nullable().optional().describe('Min width (null to remove)'),
-      maxWidth: z.number().nullable().optional().describe('Max width (null to remove)'),
-      minHeight: z.number().nullable().optional().describe('Min height (null to remove)'),
-      maxHeight: z.number().nullable().optional().describe('Max height (null to remove)'),
-    }),
-    command: 'set_min_max_size',
-    type: 'write',
-    supportsBatch: true,
-  },
-  {
-    name: 'pilot_set_layout_align',
-    description: 'Set layout align and grow for auto-layout children. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
+      nodeId: z.string().describe('Node ID'),
+      // sizing
+      horizontalSizing: z.enum(['FIXED', 'HUG', 'FILL']).optional().describe('Horizontal sizing'),
+      verticalSizing: z.enum(['FIXED', 'HUG', 'FILL']).optional().describe('Vertical sizing'),
+      // min/max
+      minWidth: z.number().nullable().optional().describe('Min width'),
+      maxWidth: z.number().nullable().optional().describe('Max width'),
+      minHeight: z.number().nullable().optional().describe('Min height'),
+      maxHeight: z.number().nullable().optional().describe('Max height'),
+      // align
       layoutAlign: z.enum(['INHERIT', 'STRETCH']).optional().describe('Layout align'),
       layoutGrow: z.number().min(0).max(1).optional().describe('Layout grow (0 or 1)'),
+      // positioning
+      positioning: z.enum(['AUTO', 'ABSOLUTE']).optional().describe('Positioning mode'),
     }),
-    command: 'set_layout_align',
-    type: 'write',
-    supportsBatch: true,
-  },
-  {
-    name: 'pilot_set_layout_positioning',
-    description: 'Set layout positioning (AUTO/ABSOLUTE) for auto-layout children. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      positioning: z.enum(['AUTO', 'ABSOLUTE']).describe('Positioning mode'),
-    }),
-    command: 'set_layout_positioning',
+    commandResolver: (params) => {
+      // Dispatch to multiple commands sequentially via the first applicable one.
+      // For simplicity, we pick the primary command based on which params are set.
+      const {
+        nodeId,
+        horizontalSizing,
+        verticalSizing,
+        minWidth,
+        maxWidth,
+        minHeight,
+        maxHeight,
+        layoutAlign,
+        layoutGrow,
+        positioning,
+      } = params as Record<string, unknown>;
+
+      // Priority: positioning > sizing > min/max > align
+      if (positioning !== undefined) {
+        return { command: 'set_layout_positioning', params: { nodeId, positioning } };
+      }
+      if (horizontalSizing !== undefined || verticalSizing !== undefined) {
+        return {
+          command: 'set_layout_sizing',
+          params: { nodeId, horizontal: horizontalSizing, vertical: verticalSizing },
+        };
+      }
+      if (minWidth !== undefined || maxWidth !== undefined || minHeight !== undefined || maxHeight !== undefined) {
+        return { command: 'set_min_max_size', params: { nodeId, minWidth, maxWidth, minHeight, maxHeight } };
+      }
+      if (layoutAlign !== undefined || layoutGrow !== undefined) {
+        return { command: 'set_layout_align', params: { nodeId, layoutAlign, layoutGrow } };
+      }
+      // fallback
+      return { command: 'set_layout_sizing', params: { nodeId } };
+    },
     type: 'write',
     supportsBatch: true,
   },
 
-  // ==================== Node Hierarchy ====================
+  // ==================== Node Hierarchy (merged 3→1) ====================
   {
-    name: 'pilot_append_child',
-    description: 'Append a node as child of another node. [WRITE]',
+    name: 'pilot_move_child',
+    description: 'Append/insert/reorder child in parent [WRITE]',
     schema: z.object({
       parentId: z.string().describe('Parent node ID'),
-      childId: z.string().describe('Child node ID to append'),
+      childId: z.string().describe('Child node ID'),
+      index: z.number().min(0).optional().describe('Index (omit to append)'),
+      reorder: z.boolean().optional().describe('Reorder existing child'),
     }),
-    command: 'append_child',
-    type: 'write',
-  },
-  {
-    name: 'pilot_insert_child',
-    description: 'Insert a node at specific index in parent. [WRITE]',
-    schema: z.object({
-      parentId: z.string().describe('Parent node ID'),
-      childId: z.string().describe('Child node ID to insert'),
-      index: z.number().min(0).describe('Index position'),
-    }),
-    command: 'insert_child',
-    type: 'write',
-  },
-  {
-    name: 'pilot_reorder_child',
-    description: 'Reorder a child node within its parent. [WRITE]',
-    schema: z.object({
-      parentId: z.string().describe('Parent node ID'),
-      childId: z.string().describe('Child node ID to reorder'),
-      index: z.number().min(0).describe('New index position'),
-    }),
-    command: 'reorder_child',
+    commandResolver: (params) => {
+      const { parentId, childId, index, reorder } = params as Record<string, unknown>;
+      if (reorder) {
+        return { command: 'reorder_child', params: { parentId, childId, index: index ?? 0 } };
+      }
+      if (index !== undefined) {
+        return { command: 'insert_child', params: { parentId, childId, index } };
+      }
+      return { command: 'append_child', params: { parentId, childId } };
+    },
     type: 'write',
   },
 
   // ==================== Instance Operations ====================
   {
     name: 'pilot_detach_instance',
-    description: 'Detach an instance from its component. [WRITE]',
+    description: 'Detach instance from component [WRITE]',
     schema: z.object({
       nodeId: z.string().describe('Instance node ID'),
     }),
@@ -559,7 +630,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_reset_overrides',
-    description: 'Reset all overrides on an instance. [WRITE]',
+    description: 'Reset instance overrides [WRITE]',
     schema: z.object({
       nodeId: z.string().describe('Instance node ID'),
     }),
@@ -568,7 +639,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_swap_component',
-    description: 'Swap an instance to a different component. [WRITE]',
+    description: 'Swap instance to different component [WRITE]',
     schema: z.object({
       nodeId: z.string().describe('Instance node ID'),
       componentKey: z.string().describe('New component key'),
@@ -580,10 +651,10 @@ const tools: ToolDef[] = [
   // ==================== Additional Properties ====================
   {
     name: 'pilot_set_clips_content',
-    description: 'Set whether frame clips its content. Supports batch. [WRITE]',
+    description: 'Set frame clips content [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Frame node ID'),
-      clipsContent: z.boolean().describe('Clips content'),
+      nodeId: z.string().describe('Frame ID'),
+      clipsContent: z.boolean().describe('Clips'),
     }),
     command: 'set_clips_content',
     type: 'write',
@@ -591,22 +662,22 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_layout_wrap',
-    description: 'Set layout wrap mode for auto-layout frame. [WRITE]',
+    description: 'Set layout wrap mode [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Frame node ID'),
-      wrap: z.enum(['NO_WRAP', 'WRAP']).describe('Wrap mode'),
-      counterAxisSpacing: z.number().optional().describe('Spacing between wrapped rows'),
-      counterAxisAlignContent: z.enum(['AUTO', 'SPACE_BETWEEN']).optional().describe('Wrapped content alignment'),
+      nodeId: z.string().describe('Frame ID'),
+      wrap: z.enum(['NO_WRAP', 'WRAP']).describe('Wrap'),
+      counterAxisSpacing: z.number().optional().describe('Row spacing'),
+      counterAxisAlignContent: z.enum(['AUTO', 'SPACE_BETWEEN']).optional().describe('Content align'),
     }),
     command: 'set_layout_wrap',
     type: 'write',
   },
   {
     name: 'pilot_set_overflow',
-    description: 'Set overflow/scroll direction. Supports batch. [WRITE]',
+    description: 'Set overflow direction [WRITE] [BATCH]',
     schema: z.object({
-      nodeId: z.string().describe('Frame node ID'),
-      direction: z.enum(['NONE', 'HORIZONTAL', 'VERTICAL', 'BOTH']).describe('Overflow direction'),
+      nodeId: z.string().describe('Frame ID'),
+      direction: z.enum(['NONE', 'HORIZONTAL', 'VERTICAL', 'BOTH']).describe('Direction'),
     }),
     command: 'set_overflow',
     type: 'write',
@@ -614,84 +685,68 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_set_guides',
-    description: 'Set guides on a frame or page. [WRITE]',
+    description: 'Set guides on frame/page [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Frame or Page ID'),
+      nodeId: z.string().describe('Frame/Page ID'),
       guides: z
-        .array(
-          z.object({
-            axis: z.enum(['X', 'Y']).describe('Guide axis'),
-            offset: z.number().describe('Guide position'),
-          }),
-        )
-        .describe('Guides array'),
+        .array(z.object({ axis: z.enum(['X', 'Y']).describe('Axis'), offset: z.number().describe('Position') }))
+        .describe('Guides'),
     }),
     command: 'set_guides',
     type: 'write',
   },
 
-  // ==================== Styles (Additional) ====================
+  // ==================== Variable Binding (merged 4→1) ====================
   {
-    name: 'pilot_create_effect_style',
-    description: 'Create an effect style. [WRITE]',
+    name: 'pilot_bind_variable',
+    description: 'Bind variable to property/paint/effect/grid [WRITE]',
     schema: z.object({
-      name: z.string().describe('Style name'),
-      effects: z.array(z.record(z.string(), z.unknown())).optional().describe('Effects array'),
-    }),
-    command: 'create_effect_style',
-    type: 'write',
-  },
-  {
-    name: 'pilot_create_grid_style',
-    description: 'Create a grid style. [WRITE]',
-    schema: z.object({
-      name: z.string().describe('Style name'),
-      layoutGrids: z.array(z.record(z.string(), z.unknown())).optional().describe('Layout grids array'),
-    }),
-    command: 'create_grid_style',
-    type: 'write',
-  },
-  {
-    name: 'pilot_apply_effect_style',
-    description: 'Apply effect style to node. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      styleId: z.string().describe('Effect style ID'),
-    }),
-    command: 'apply_effect_style',
-    type: 'write',
-  },
-  {
-    name: 'pilot_apply_grid_style',
-    description: 'Apply grid style to frame. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Frame node ID'),
-      styleId: z.string().describe('Grid style ID'),
-    }),
-    command: 'apply_grid_style',
-    type: 'write',
-  },
-
-  // ==================== Variable Binding ====================
-  {
-    name: 'pilot_set_bound_variable',
-    description: 'Bind a variable to a node property. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      field: z.string().describe("Field to bind (e.g., 'fills', 'opacity', 'visible')"),
+      target: z.enum(['PROPERTY', 'PAINT', 'EFFECT', 'LAYOUT_GRID']).describe('Bind target'),
+      nodeId: z.string().describe('Node ID'),
       variableId: z.string().describe('Variable ID'),
+      // PROPERTY specific
+      field: z.string().optional().describe("Property field (e.g. 'fills', 'opacity')"),
+      // PAINT specific
+      fillIndex: z.number().optional().describe('Fill index'),
+      // EFFECT specific
+      effectIndex: z.number().optional().describe('Effect index'),
+      // LAYOUT_GRID specific
+      gridIndex: z.number().optional().describe('Grid index'),
     }),
-    command: 'set_bound_variable',
+    commandResolver: (params) => {
+      const { target, nodeId, variableId, field, fillIndex, effectIndex, gridIndex } = params as Record<
+        string,
+        unknown
+      >;
+      switch (target) {
+        case 'PROPERTY':
+          return { command: 'set_bound_variable', params: { nodeId, field, variableId } };
+        case 'PAINT':
+          return { command: 'set_bound_variable_for_paint', params: { nodeId, variableId, fillIndex: fillIndex ?? 0 } };
+        case 'EFFECT':
+          return {
+            command: 'set_bound_variable_for_effect',
+            params: { nodeId, variableId, effectIndex: effectIndex ?? 0, field },
+          };
+        case 'LAYOUT_GRID':
+          return {
+            command: 'set_bound_variable_for_layout_grid',
+            params: { nodeId, variableId, gridIndex: gridIndex ?? 0, field },
+          };
+        default:
+          return { command: 'set_bound_variable', params: { nodeId, field, variableId } };
+      }
+    },
     type: 'write',
   },
 
   // ==================== Component Properties ====================
   {
     name: 'pilot_set_component_properties',
-    description: 'Set properties on a component instance. [WRITE]',
+    description: 'Set instance properties [WRITE]',
     schema: z.object({
       nodeId: z.string().describe('Instance node ID'),
-      properties: z.record(z.string(), z.union([z.string(), z.boolean()])).describe('Properties to set'),
+      properties: z.record(z.string(), z.union([z.string(), z.boolean()])).describe('Properties'),
     }),
     command: 'set_component_properties',
     type: 'write',
@@ -700,24 +755,21 @@ const tools: ToolDef[] = [
   // ==================== Export Settings ====================
   {
     name: 'pilot_set_export_settings',
-    description: 'Set export settings on a node. [WRITE]',
+    description: 'Set export settings [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
+      nodeId: z.string().describe('Node ID'),
       settings: z
         .array(
           z.object({
-            format: z.enum(['PNG', 'JPG', 'SVG', 'PDF']).describe('Export format'),
-            suffix: z.string().optional().describe('File suffix'),
+            format: z.enum(['PNG', 'JPG', 'SVG', 'PDF']).describe('Format'),
+            suffix: z.string().optional().describe('Suffix'),
             constraint: z
-              .object({
-                type: z.enum(['SCALE', 'WIDTH', 'HEIGHT']),
-                value: z.number(),
-              })
+              .object({ type: z.enum(['SCALE', 'WIDTH', 'HEIGHT']), value: z.number() })
               .optional()
-              .describe('Size constraint'),
+              .describe('Constraint'),
           }),
         )
-        .describe('Export settings'),
+        .describe('Settings'),
     }),
     command: 'set_export_settings',
     type: 'write',
@@ -726,10 +778,10 @@ const tools: ToolDef[] = [
   // ==================== Prototype Interactions ====================
   {
     name: 'pilot_set_reactions',
-    description: 'Set prototype reactions/interactions on a node. [WRITE]',
+    description: 'Set prototype reactions [WRITE]',
     schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      reactions: z.array(z.record(z.string(), z.unknown())).describe('Reactions array'),
+      nodeId: z.string().describe('Node ID'),
+      reactions: z.array(z.record(z.string(), z.unknown())).describe('Reactions'),
     }),
     command: 'set_reactions',
     type: 'write',
@@ -738,95 +790,60 @@ const tools: ToolDef[] = [
   // ==================== Variable Creation ====================
   {
     name: 'pilot_create_variable_collection',
-    description: 'Create a variable collection. [WRITE]',
+    description: 'Create variable collection [WRITE]',
     schema: z.object({
-      name: z.string().describe('Collection name'),
+      name: z.string().describe('Name'),
     }),
     command: 'create_variable_collection',
     type: 'write',
   },
   {
     name: 'pilot_create_variable',
-    description: 'Create a variable in a collection. [WRITE]',
+    description: 'Create variable [WRITE]',
     schema: z.object({
-      name: z.string().describe('Variable name'),
-      collectionId: z.string().describe('Variable collection ID'),
-      resolvedType: z.enum(['BOOLEAN', 'FLOAT', 'STRING', 'COLOR']).describe('Variable type'),
+      name: z.string().describe('Name'),
+      collectionId: z.string().describe('Collection ID'),
+      resolvedType: z.enum(['BOOLEAN', 'FLOAT', 'STRING', 'COLOR']).describe('Type'),
     }),
     command: 'create_variable',
     type: 'write',
   },
   {
     name: 'pilot_set_variable_value',
-    description: "Set a variable's value for a specific mode. [WRITE]",
+    description: 'Set variable value for mode [WRITE]',
     schema: z.object({
       variableId: z.string().describe('Variable ID'),
       modeId: z.string().describe('Mode ID'),
-      value: z.unknown().describe('Variable value (type depends on resolvedType)'),
+      value: z.unknown().describe('Value'),
     }),
     command: 'set_variable_value',
     type: 'write',
   },
   {
     name: 'pilot_create_variable_alias',
-    description: 'Create an alias to another variable. [WRITE]',
+    description: 'Create variable alias [WRITE]',
     schema: z.object({
-      variableId: z.string().describe('Variable ID to alias'),
+      variableId: z.string().describe('Variable ID'),
     }),
     command: 'create_variable_alias',
     type: 'write',
   },
-  {
-    name: 'pilot_set_bound_variable_for_paint',
-    description: "Bind a color variable to a node's fill paint. [WRITE]",
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      variableId: z.string().describe('Color variable ID'),
-      fillIndex: z.number().default(0).describe('Fill index (default 0)'),
-    }),
-    command: 'set_bound_variable_for_paint',
-    type: 'write',
-  },
-  {
-    name: 'pilot_set_bound_variable_for_effect',
-    description: "Bind a variable to a node's effect. [WRITE]",
-    schema: z.object({
-      nodeId: z.string().describe('Target node ID'),
-      variableId: z.string().describe('Variable ID'),
-      effectIndex: z.number().default(0).describe('Effect index (default 0)'),
-      field: z.string().describe("Effect field to bind (e.g., 'color', 'radius')"),
-    }),
-    command: 'set_bound_variable_for_effect',
-    type: 'write',
-  },
-  {
-    name: 'pilot_set_bound_variable_for_layout_grid',
-    description: "Bind a variable to a frame's layout grid property. [WRITE]",
-    schema: z.object({
-      nodeId: z.string().describe('Target frame node ID'),
-      variableId: z.string().describe('Variable ID'),
-      gridIndex: z.number().default(0).describe('Grid index (default 0)'),
-      field: z.string().describe("Grid field to bind (e.g., 'gutterSize', 'count', 'offset', 'sectionSize')"),
-    }),
-    command: 'set_bound_variable_for_layout_grid',
-    type: 'write',
-  },
 
-  // ==================== Team Library ====================
+  // ==================== Team Library (merged imports into reading-tools) ====================
   {
     name: 'pilot_import_style_by_key',
-    description: 'Import a style from a team library by its key. [WRITE]',
+    description: 'Import style by key [WRITE]',
     schema: z.object({
-      key: z.string().describe('Style key from published team library'),
+      key: z.string().describe('Style key'),
     }),
     command: 'import_style_by_key',
     type: 'write',
   },
   {
     name: 'pilot_import_variable_by_key',
-    description: 'Import a variable from a team library by its key. [WRITE]',
+    description: 'Import variable by key [WRITE]',
     schema: z.object({
-      key: z.string().describe('Variable key from published team library'),
+      key: z.string().describe('Variable key'),
     }),
     command: 'import_variable_by_key',
     type: 'write',
@@ -835,90 +852,93 @@ const tools: ToolDef[] = [
   // ==================== Combine As Variants ====================
   {
     name: 'pilot_combine_as_variants',
-    description: 'Combine multiple components as variants into a component set. [WRITE]',
+    description: 'Combine components as variants [WRITE]',
     schema: z.object({
-      nodeIds: z.array(z.string()).min(2).describe('Component node IDs (at least 2)'),
+      nodeIds: z.array(z.string()).min(2).describe('Component IDs (min 2)'),
     }),
     command: 'combine_as_variants',
     type: 'write',
   },
 
-  // ==================== Style Ordering ====================
+  // ==================== Style Ordering (merged 4→1) ====================
   {
-    name: 'pilot_move_paint_style_after',
-    description: 'Move a paint style after another in the list. [WRITE]',
+    name: 'pilot_move_style',
+    description: 'Reorder style in list [WRITE]',
     schema: z.object({
+      styleType: z.enum(['PAINT', 'TEXT', 'EFFECT', 'GRID']).describe('Style type'),
       targetStyleId: z.string().describe('Style ID to move'),
-      referenceStyleId: z.string().nullable().optional().describe('Style ID to place after (null for beginning)'),
+      referenceStyleId: z.string().nullable().optional().describe('Place after (null=beginning)'),
     }),
-    command: 'move_paint_style_after',
-    type: 'write',
-  },
-  {
-    name: 'pilot_move_text_style_after',
-    description: 'Move a text style after another in the list. [WRITE]',
-    schema: z.object({
-      targetStyleId: z.string().describe('Style ID to move'),
-      referenceStyleId: z.string().nullable().optional().describe('Style ID to place after (null for beginning)'),
-    }),
-    command: 'move_text_style_after',
-    type: 'write',
-  },
-  {
-    name: 'pilot_move_effect_style_after',
-    description: 'Move an effect style after another in the list. [WRITE]',
-    schema: z.object({
-      targetStyleId: z.string().describe('Style ID to move'),
-      referenceStyleId: z.string().nullable().optional().describe('Style ID to place after (null for beginning)'),
-    }),
-    command: 'move_effect_style_after',
-    type: 'write',
-  },
-  {
-    name: 'pilot_move_grid_style_after',
-    description: 'Move a grid style after another in the list. [WRITE]',
-    schema: z.object({
-      targetStyleId: z.string().describe('Style ID to move'),
-      referenceStyleId: z.string().nullable().optional().describe('Style ID to place after (null for beginning)'),
-    }),
-    command: 'move_grid_style_after',
+    commandResolver: (params) => {
+      const cmdMap: Record<string, string> = {
+        PAINT: 'move_paint_style_after',
+        TEXT: 'move_text_style_after',
+        EFFECT: 'move_effect_style_after',
+        GRID: 'move_grid_style_after',
+      };
+      return {
+        command: cmdMap[params.styleType as string]!,
+        params: { targetStyleId: params.targetStyleId, referenceStyleId: params.referenceStyleId },
+      };
+    },
     type: 'write',
   },
 
   // ==================== Utility ====================
   {
     name: 'pilot_create_solid_paint',
-    description: "Create a solid paint object using Figma's util.solidPaint. [WRITE]",
+    description: 'Create solid paint object [WRITE]',
     schema: z.object({
-      color: z.string().describe("Color string (e.g., '#FF0000', 'red')"),
-      overrides: z.record(z.string(), z.unknown()).optional().describe('Optional paint overrides'),
+      color: z.string().describe("Color string (e.g. '#FF0000')"),
+      overrides: z.record(z.string(), z.unknown()).optional().describe('Overrides'),
     }),
     command: 'create_solid_paint',
     type: 'write',
   },
 
-  // ==================== Event Subscription ====================
+  // ==================== Event Subscription (merged 2→1) ====================
   {
-    name: 'pilot_subscribe_event',
-    description: 'Subscribe to a Figma event. Events will be pushed via WebSocket. [WRITE]',
+    name: 'pilot_event',
+    description: 'Subscribe/unsubscribe to events [WRITE]',
     schema: z.object({
+      action: z.enum(['subscribe', 'unsubscribe']).describe('Action'),
       eventType: z
         .enum(['selectionchange', 'currentpagechange', 'documentchange', 'stylechange'])
-        .describe('Event type to subscribe'),
+        .describe('Event type'),
     }),
-    command: 'subscribe_event',
+    commandResolver: (params) => {
+      const command = params.action === 'subscribe' ? 'subscribe_event' : 'unsubscribe_event';
+      return { command, params: { eventType: params.eventType } };
+    },
+    type: 'write',
+  },
+
+  // ==================== Image Fill/Filters ====================
+  {
+    name: 'pilot_set_image_fill',
+    description: 'Set image fill on node (by hash, base64, or URL) [WRITE]',
+    schema: z.object({
+      nodeId: z.string().describe('Node ID'),
+      imageHash: z.string().optional().describe('Existing image hash'),
+      base64: z.string().optional().describe('Base64 image data'),
+      url: z.string().optional().describe('Image URL'),
+      scaleMode: z.enum(['FILL', 'FIT', 'CROP', 'TILE']).default('FILL').describe('Scale mode'),
+      filters: imageFiltersSchema.optional(),
+    }),
+    command: 'set_image_fill',
     type: 'write',
   },
   {
-    name: 'pilot_unsubscribe_event',
-    description: 'Unsubscribe from a Figma event. [WRITE]',
+    name: 'pilot_set_image_filters',
+    description: 'Set filters on existing IMAGE fill [WRITE] [BATCH]',
     schema: z.object({
-      eventType: z
-        .enum(['selectionchange', 'currentpagechange', 'documentchange', 'stylechange'])
-        .describe('Event type to unsubscribe'),
+      nodeId: z.string().describe('Node ID'),
+      filters: imageFiltersSchema,
+      fillIndex: z.number().default(0).describe('Fill index (0-based)'),
     }),
-    command: 'unsubscribe_event',
+    command: 'set_image_filters',
     type: 'write',
+    supportsBatch: true,
   },
 ];
 

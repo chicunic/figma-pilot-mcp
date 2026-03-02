@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { type ZodRawShape, z } from 'zod';
 import { formatErrorResponse, parsePluginError } from '../utils/errors.ts';
-import { sendCommand } from '../utils/websocket.ts';
+import { sendCommand } from '../utils/ws-bridge.ts';
 
 // ==================== Types ====================
 
@@ -11,7 +11,11 @@ export interface ToolDef {
   name: string;
   description: string;
   schema: z.ZodObject<ZodRawShape>;
-  command: string;
+  command?: string;
+  commandResolver?: (params: Record<string, unknown>) => {
+    command: string;
+    params: Record<string, unknown>;
+  };
   type: 'read' | 'write';
   transform?: TransformFn;
   supportsBatch?: boolean;
@@ -36,6 +40,17 @@ function pickFields(obj: Record<string, unknown>, fields: string[]): Record<stri
   return result;
 }
 
+function resolveCommand(
+  tool: ToolDef,
+  params: Record<string, unknown>,
+): { command: string; params: Record<string, unknown> } {
+  if (tool.commandResolver) {
+    return tool.commandResolver(params);
+  }
+  const transformedParams = tool.transform ? tool.transform(params) : params;
+  return { command: tool.command!, params: transformedParams };
+}
+
 async function executeBatchOperation(
   tool: ToolDef,
   nodeIds: string[],
@@ -46,9 +61,9 @@ async function executeBatchOperation(
 
   for (const nodeId of nodeIds) {
     const singleParams = { ...restParams, nodeId };
-    const transformedParams = tool.transform ? tool.transform(singleParams) : singleParams;
+    const { command, params: resolvedParams } = resolveCommand(tool, singleParams);
     try {
-      const result = await sendCommand(tool.command, transformedParams);
+      const result = await sendCommand(command, resolvedParams);
       if (result.success) {
         results.push(result.result);
       } else {
@@ -100,8 +115,8 @@ export function registerTool(server: McpServer, tool: ToolDef): void {
     }
 
     try {
-      const transformedParams = tool.transform ? tool.transform(restParams) : restParams;
-      const result = await sendCommand(tool.command, transformedParams);
+      const { command, params: resolvedParams } = resolveCommand(tool, restParams);
+      const result = await sendCommand(command, resolvedParams);
 
       if (!result.success && result.error) {
         const pilotError = parsePluginError(result.error);

@@ -6,7 +6,7 @@ const tools: ToolDef[] = [
   // ==================== Node Query ====================
   {
     name: 'pilot_get_node',
-    description: 'Get detailed node info by ID. [READ]',
+    description: 'Get node info by ID [READ]',
     schema: z.object({
       nodeId: z.string().describe('Node ID'),
     }),
@@ -15,14 +15,14 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_get_selection',
-    description: 'Get current selection. [READ]',
+    description: 'Get current selection [READ]',
     schema: z.object({}),
     command: 'get_selection',
     type: 'read',
   },
   {
     name: 'pilot_find_nodes',
-    description: 'Find nodes by type or name pattern (supports *). [READ]',
+    description: 'Find nodes by type/name pattern [READ]',
     schema: z.object({
       type: z
         .enum([
@@ -42,25 +42,25 @@ const tools: ToolDef[] = [
         .describe('Node type filter'),
       name: z.string().optional().describe('Name pattern (supports *)'),
       parentId: z.string().optional().describe('Search within parent'),
-      limit: z.number().default(100).describe('Max results'),
+      limit: z.number().default(20).describe('Max results'),
     }),
     command: 'find_nodes',
     type: 'read',
   },
   {
     name: 'pilot_get_children',
-    description: 'Get children of a node. [READ]',
+    description: 'Get children of node [READ]',
     schema: z.object({
       nodeId: z.string().describe('Parent node ID'),
-      depth: z.number().default(1).describe('Depth (1=direct children)'),
-      includeDetails: z.boolean().default(false).describe('Include visibility, opacity, etc.'),
+      depth: z.number().default(1).describe('Depth'),
+      includeDetails: z.boolean().default(false).describe('Include details'),
     }),
     command: 'get_children',
     type: 'read',
   },
   {
     name: 'pilot_get_top_frame',
-    description: 'Get the top-level frame containing a node (direct child of Page). [READ]',
+    description: 'Get top-level frame containing node [READ]',
     schema: z.object({
       nodeId: z.string().describe('Node ID'),
     }),
@@ -71,14 +71,14 @@ const tools: ToolDef[] = [
   // ==================== Page Query ====================
   {
     name: 'pilot_get_current_page',
-    description: 'Get current page info. [READ]',
+    description: 'Get current page info [READ]',
     schema: z.object({}),
     command: 'get_current_page',
     type: 'read',
   },
   {
     name: 'pilot_get_pages',
-    description: 'Get all pages in document. [READ]',
+    description: 'Get all pages [READ]',
     schema: z.object({}),
     command: 'get_pages',
     type: 'read',
@@ -87,7 +87,7 @@ const tools: ToolDef[] = [
   // ==================== Style Query ====================
   {
     name: 'pilot_get_local_styles',
-    description: 'Get local styles. [READ]',
+    description: 'Get local styles [READ]',
     schema: z.object({
       type: z.enum(['PAINT', 'TEXT', 'EFFECT', 'GRID']).optional().describe('Style type filter'),
     }),
@@ -96,9 +96,9 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_get_local_components',
-    description: 'Get local components. [READ]',
+    description: 'Get local components [READ]',
     schema: z.object({
-      allPages: z.boolean().optional().describe('Search all pages in the document (requires loading all pages)'),
+      allPages: z.boolean().optional().describe('Search all pages'),
     }),
     command: 'get_local_components',
     type: 'read',
@@ -107,7 +107,7 @@ const tools: ToolDef[] = [
   // ==================== Variable Query ====================
   {
     name: 'pilot_get_local_variables',
-    description: 'Get local variables. [READ]',
+    description: 'Get local variables [READ]',
     schema: z.object({
       type: z.enum(['BOOLEAN', 'FLOAT', 'STRING', 'COLOR']).optional().describe('Variable type filter'),
     }),
@@ -116,7 +116,7 @@ const tools: ToolDef[] = [
   },
   {
     name: 'pilot_get_variable_collections',
-    description: 'Get variable collections. [READ]',
+    description: 'Get variable collections [READ]',
     schema: z.object({}),
     command: 'get_variable_collections',
     type: 'read',
@@ -125,7 +125,7 @@ const tools: ToolDef[] = [
   // ==================== Viewport Query ====================
   {
     name: 'pilot_get_viewport',
-    description: 'Get current viewport (center, zoom, bounds). [READ]',
+    description: 'Get current viewport [READ]',
     schema: z.object({}),
     command: 'get_viewport',
     type: 'read',
@@ -134,11 +134,11 @@ const tools: ToolDef[] = [
   // ==================== Export ====================
   {
     name: 'pilot_export_node',
-    description: 'Export node as PNG/JPG/SVG/PDF (returns base64). [READ]',
+    description: 'Export node as PNG/JPG/SVG/PDF [READ]',
     schema: z.object({
-      nodeId: z.string().describe('Node ID to export'),
-      format: z.enum(['PNG', 'JPG', 'SVG', 'PDF']).default('PNG').describe('Export format'),
-      scale: z.number().default(1).describe('Scale (for PNG/JPG)'),
+      nodeId: z.string().describe('Node ID'),
+      format: z.enum(['PNG', 'JPG', 'SVG', 'PDF']).default('PNG').describe('Format'),
+      scale: z.number().default(1).describe('Scale'),
     }),
     command: 'export_node',
     type: 'read',
@@ -147,9 +147,9 @@ const tools: ToolDef[] = [
   // ==================== Component Properties Query ====================
   {
     name: 'pilot_get_component_properties',
-    description: 'Get component properties (for instances) or property definitions (for components). [READ]',
+    description: 'Get component/instance properties [READ]',
     schema: z.object({
-      nodeId: z.string().describe('Component or Instance node ID'),
+      nodeId: z.string().describe('Node ID'),
     }),
     command: 'get_component_properties',
     type: 'read',
@@ -158,7 +158,7 @@ const tools: ToolDef[] = [
   // ==================== Export Settings Query ====================
   {
     name: 'pilot_get_export_settings',
-    description: 'Get export settings of a node. [READ]',
+    description: 'Get export settings of node [READ]',
     schema: z.object({
       nodeId: z.string().describe('Node ID'),
     }),
@@ -169,7 +169,7 @@ const tools: ToolDef[] = [
   // ==================== Prototype Interactions Query ====================
   {
     name: 'pilot_get_reactions',
-    description: 'Get prototype reactions/interactions of a node. [READ]',
+    description: 'Get prototype reactions of node [READ]',
     schema: z.object({
       nodeId: z.string().describe('Node ID'),
     }),
@@ -180,96 +180,85 @@ const tools: ToolDef[] = [
   // ==================== Team Library Query ====================
   {
     name: 'pilot_get_library_variable_collections',
-    description: 'Get available variable collections from enabled team libraries. [READ]',
+    description: 'Get library variable collections [READ]',
     schema: z.object({}),
     command: 'get_library_variable_collections',
     type: 'read',
   },
   {
     name: 'pilot_get_library_variables',
-    description: 'Get variables from a team library collection. [READ]',
+    description: 'Get library variables by collection [READ]',
     schema: z.object({
-      collectionKey: z.string().describe('Library variable collection key'),
+      collectionKey: z.string().describe('Collection key'),
     }),
     command: 'get_library_variables',
     type: 'read',
   },
 
-  // ==================== Team Library Import ====================
+  // ==================== Library Import (merged 6→1) ====================
   {
-    name: 'pilot_import_component',
-    description: 'Import a component from team library by key. [READ]',
+    name: 'pilot_import_library',
+    description: 'Import component/style/variable from library [READ]',
     schema: z.object({
-      componentKey: z.string().describe('Component key from team library'),
+      type: z.enum(['COMPONENT', 'COMPONENT_SET', 'STYLE', 'VARIABLE']).describe('Import type'),
+      key: z.string().describe('Library item key'),
     }),
-    command: 'import_component',
-    type: 'read',
-  },
-  {
-    name: 'pilot_import_component_set',
-    description: 'Import a component set (variants) from team library by key. [READ]',
-    schema: z.object({
-      componentSetKey: z.string().describe('Component set key from team library'),
-    }),
-    command: 'import_component_set',
-    type: 'read',
-  },
-  {
-    name: 'pilot_import_style',
-    description: 'Import a style from team library by key. [READ]',
-    schema: z.object({
-      styleKey: z.string().describe('Style key from team library'),
-    }),
-    command: 'import_style',
-    type: 'read',
-  },
-  {
-    name: 'pilot_import_variable',
-    description: 'Import a variable from team library by key. [READ]',
-    schema: z.object({
-      variableKey: z.string().describe('Variable key from team library'),
-    }),
-    command: 'import_variable',
+    commandResolver: (params) => {
+      const commandMap: Record<string, string> = {
+        COMPONENT: 'import_component',
+        COMPONENT_SET: 'import_component_set',
+        STYLE: 'import_style',
+        VARIABLE: 'import_variable',
+      };
+      const type = params.type as string;
+      const keyParam: Record<string, string> = {
+        COMPONENT: 'componentKey',
+        COMPONENT_SET: 'componentSetKey',
+        STYLE: 'styleKey',
+        VARIABLE: 'variableKey',
+      };
+      return {
+        command: commandMap[type]!,
+        params: { [keyParam[type]!]: params.key },
+      };
+    },
     type: 'read',
   },
 
   // ==================== Component Set Variants ====================
   {
     name: 'pilot_get_component_set_variants',
-    description:
-      'Import a component set by key and get all its variants. Use this to explore variants of a library component set. [READ]',
+    description: 'Get variants of library component set [READ]',
     schema: z.object({
-      componentSetKey: z.string().describe('Component set key from team library'),
+      componentSetKey: z.string().describe('Component set key'),
     }),
     command: 'get_component_set_variants',
     type: 'read',
   },
 
-  // ==================== Image Query ====================
+  // ==================== Image Query (merged 2→1) ====================
   {
-    name: 'pilot_get_image_by_hash',
-    description: 'Get image info by hash. [READ]',
+    name: 'pilot_get_image',
+    description: 'Get image info/bytes by hash [READ]',
     schema: z.object({
       hash: z.string().describe('Image hash'),
+      includeBytes: z.boolean().default(false).describe('Include base64 bytes'),
     }),
-    command: 'get_image_by_hash',
-    type: 'read',
-  },
-  {
-    name: 'pilot_get_image_bytes',
-    description: 'Get image bytes as base64 by hash. [READ]',
-    schema: z.object({
-      hash: z.string().describe('Image hash'),
-    }),
-    command: 'get_image_bytes',
+    commandResolver: (params) => {
+      const command = params.includeBytes ? 'get_image_bytes' : 'get_image_by_hash';
+      return { command, params: { hash: params.hash } };
+    },
     type: 'read',
   },
 
   // ==================== Font Query ====================
   {
     name: 'pilot_list_available_fonts',
-    description: 'List all available fonts. [READ]',
-    schema: z.object({}),
+    description: 'List available fonts [READ]',
+    schema: z.object({
+      search: z.string().optional().describe('Filter by font name'),
+      limit: z.number().default(50).describe('Max results'),
+    }),
     command: 'list_available_fonts',
     type: 'read',
   },
@@ -277,36 +266,31 @@ const tools: ToolDef[] = [
   // ==================== Selection Colors ====================
   {
     name: 'pilot_get_selection_colors',
-    description: 'Get colors from current selection. [READ]',
+    description: 'Get colors from selection [READ]',
     schema: z.object({}),
     command: 'get_selection_colors',
     type: 'read',
   },
 
-  // ==================== Utility Functions ====================
+  // ==================== Color Parse (merged 2→1) ====================
   {
     name: 'pilot_parse_color',
-    description: "Parse color string to RGB using Figma's util.rgb. [READ]",
+    description: 'Parse color string to RGB/RGBA [READ]',
     schema: z.object({
-      color: z.string().describe("Color string (e.g., '#FF0000', 'red', 'rgb(255,0,0)')"),
+      color: z.string().describe("Color string (e.g. '#FF0000', 'red')"),
+      includeAlpha: z.boolean().default(false).describe('Return RGBA instead of RGB'),
     }),
-    command: 'parse_color',
-    type: 'read',
-  },
-  {
-    name: 'pilot_parse_color_rgba',
-    description: "Parse color string to RGBA using Figma's util.rgba. [READ]",
-    schema: z.object({
-      color: z.string().describe("Color string (e.g., '#FF0000', 'red', 'rgba(255,0,0,0.5)')"),
-    }),
-    command: 'parse_color_rgba',
+    commandResolver: (params) => {
+      const command = params.includeAlpha ? 'parse_color_rgba' : 'parse_color';
+      return { command, params: { color: params.color } };
+    },
     type: 'read',
   },
 
   // ==================== Event Subscriptions ====================
   {
     name: 'pilot_get_event_subscriptions',
-    description: 'Get current event subscription status. [READ]',
+    description: 'Get event subscription status [READ]',
     schema: z.object({}),
     command: 'get_event_subscriptions',
     type: 'read',

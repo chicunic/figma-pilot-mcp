@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { connectToFigma, disconnect, getChannel, getWebSocketUrl, isConnected } from '../utils/websocket.ts';
+import { connectToFigma, disconnect, getChannel, getWebSocketUrl, isConnected } from '../utils/ws-bridge.ts';
 
 export function registerConnectionTools(server: McpServer): void {
   server.registerTool(

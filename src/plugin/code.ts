@@ -254,6 +254,15 @@ async function createNodeFromDef(def: NodeTreeDef, parent?: ChildrenMixin): Prom
     case 'COMPONENT':
       node = figma.createComponent();
       break;
+    case 'STICKY':
+      node = figma.createSticky();
+      break;
+    case 'CONNECTOR':
+      node = figma.createConnector();
+      break;
+    case 'SHAPE_WITH_TEXT':
+      node = figma.createShapeWithText();
+      break;
     default:
       throw new Error(`Unsupported node type: ${def.type}`);
   }
@@ -262,8 +271,8 @@ async function createNodeFromDef(def: NodeTreeDef, parent?: ChildrenMixin): Prom
   if (def.name) node.name = def.name;
   if (def.x !== undefined) node.x = def.x;
   if (def.y !== undefined) node.y = def.y;
-  if (def.width !== undefined && def.height !== undefined) {
-    node.resize(def.width, def.height);
+  if (def.width !== undefined && def.height !== undefined && 'resize' in node) {
+    (node as LayoutMixin).resize(def.width, def.height);
   }
   if (def.visible !== undefined) node.visible = def.visible;
   if (def.locked !== undefined) node.locked = def.locked;
@@ -511,7 +520,12 @@ const commandHandlers: Record<string, CommandHandler> = {
     rect.y = (p.y as number) || 0;
     rect.resize((p.width as number) || 100, (p.height as number) || 100);
     rect.fills = [
-      { type: 'IMAGE', imageHash: image.hash, scaleMode: (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL' },
+      {
+        type: 'IMAGE',
+        imageHash: image.hash,
+        scaleMode: (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL',
+        ...(p.filters ? { filters: p.filters as ImageFilters } : {}),
+      },
     ];
     await appendToParent(rect, p.parentId as string);
     return { id: rect.id, name: rect.name, imageHash: image.hash };
@@ -536,6 +550,96 @@ const commandHandlers: Record<string, CommandHandler> = {
       { type: 'SOLID', color: { r: p.r as number, g: p.g as number, b: p.b as number }, opacity: opacity },
     ];
     geo.strokeWeight = (p.strokeWeight as number) || 1;
+    return { id: node.id };
+  },
+
+  set_gradient_fill: async (p) => {
+    const node = await getNode(p.nodeId as string, 'fills');
+    const gradientType = p.gradientType as
+      | 'GRADIENT_LINEAR'
+      | 'GRADIENT_RADIAL'
+      | 'GRADIENT_ANGULAR'
+      | 'GRADIENT_DIAMOND';
+    const stops = p.gradientStops as Array<{ position: number; color: RGBA }>;
+    const gradientTransform = p.gradientTransform as Transform | undefined;
+    const paint: GradientPaint = {
+      type: gradientType,
+      gradientStops: stops.map((s) => ({
+        position: s.position,
+        color: { r: s.color.r, g: s.color.g, b: s.color.b, a: s.color.a ?? 1 },
+      })),
+      gradientTransform: gradientTransform || [
+        [1, 0, 0],
+        [0, 1, 0],
+      ],
+    };
+    (node as GeometryMixin).fills = [paint];
+    return { id: node.id };
+  },
+
+  set_gradient_stroke: async (p) => {
+    const node = await getNode(p.nodeId as string, 'strokes');
+    const geo = node as GeometryMixin;
+    const gradientType = p.gradientType as
+      | 'GRADIENT_LINEAR'
+      | 'GRADIENT_RADIAL'
+      | 'GRADIENT_ANGULAR'
+      | 'GRADIENT_DIAMOND';
+    const stops = p.gradientStops as Array<{ position: number; color: RGBA }>;
+    const gradientTransform = p.gradientTransform as Transform | undefined;
+    const paint: GradientPaint = {
+      type: gradientType,
+      gradientStops: stops.map((s) => ({
+        position: s.position,
+        color: { r: s.color.r, g: s.color.g, b: s.color.b, a: s.color.a ?? 1 },
+      })),
+      gradientTransform: gradientTransform || [
+        [1, 0, 0],
+        [0, 1, 0],
+      ],
+    };
+    geo.strokes = [paint];
+    if (p.strokeWeight !== undefined) geo.strokeWeight = p.strokeWeight as number;
+    return { id: node.id };
+  },
+
+  set_image_fill: async (p) => {
+    const node = await getNode(p.nodeId as string, 'fills');
+    let imageHash: string;
+    if (p.imageHash) {
+      imageHash = p.imageHash as string;
+    } else if (p.base64) {
+      const imageData = figma.base64Decode(p.base64 as string);
+      const image = figma.createImage(imageData);
+      imageHash = image.hash;
+    } else if (p.url) {
+      const image = await figma.createImageAsync(p.url as string);
+      imageHash = image.hash;
+    } else {
+      throw new Error('Must provide imageHash, base64, or url');
+    }
+    const scaleMode = (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL';
+    (node as GeometryMixin).fills = [
+      {
+        type: 'IMAGE',
+        imageHash,
+        scaleMode,
+        ...(p.filters ? { filters: p.filters as ImageFilters } : {}),
+      },
+    ];
+    return { id: node.id, imageHash };
+  },
+
+  set_image_filters: async (p) => {
+    const node = await getNode(p.nodeId as string, 'fills');
+    const fills = (node as GeometryMixin).fills;
+    if (!Array.isArray(fills)) throw new Error('Node has no fills');
+    const fillIndex = (p.fillIndex as number) ?? 0;
+    const fill = fills[fillIndex];
+    if (!fill || fill.type !== 'IMAGE') throw new Error('No IMAGE fill at specified index');
+    const newFills = [...fills];
+    newFills[fillIndex] = { ...fill, filters: p.filters as ImageFilters };
+    (node as GeometryMixin).fills = newFills;
     return { id: node.id };
   },
 
@@ -868,6 +972,11 @@ const commandHandlers: Record<string, CommandHandler> = {
     if ('layoutMode' in node) info.layoutMode = node.layoutMode;
     if ('children' in node) info.childCount = node.children.length;
     if ('absoluteBoundingBox' in node) info.absoluteBoundingBox = node.absoluteBoundingBox;
+    if ('relativeTransform' in node) {
+      info.relativeTransform = node.relativeTransform;
+      const transform = node.relativeTransform as Transform;
+      info.localPosition = { x: transform[0][2], y: transform[1][2] };
+    }
 
     return info;
   },
@@ -1383,6 +1492,89 @@ const commandHandlers: Record<string, CommandHandler> = {
     return { id: table.id, name: table.name, numRows: p.numRows, numColumns: p.numColumns };
   },
 
+  // ==================== FigJam Commands ====================
+
+  create_sticky: async (p) => {
+    const sticky = figma.createSticky();
+    if (p.text) {
+      await figma.loadFontAsync(sticky.text.fontName as FontName);
+      sticky.text.characters = p.text as string;
+    }
+    if (p.x !== undefined) sticky.x = p.x as number;
+    if (p.y !== undefined) sticky.y = p.y as number;
+    if (p.color) {
+      const c = p.color as { r: number; g: number; b: number };
+      sticky.fills = [{ type: 'SOLID', color: { r: c.r, g: c.g, b: c.b } }];
+    }
+    if (p.authorVisible !== undefined) sticky.authorVisible = p.authorVisible as boolean;
+    await appendToParent(sticky, p.parentId as string);
+    return { id: sticky.id, name: sticky.name };
+  },
+
+  create_connector: async (p) => {
+    const connector = figma.createConnector();
+    if (p.name) connector.name = p.name as string;
+    // Connect endpoints
+    if (p.startNodeId) {
+      const startNode = await getSceneNode(p.startNodeId as string);
+      connector.connectorStart = {
+        endpointNodeId: startNode.id,
+        magnet: (p.startMagnet as ConnectorEndpointEndpointNodeIdAndMagnet['magnet']) || 'AUTO',
+      };
+    }
+    if (p.endNodeId) {
+      const endNode = await getSceneNode(p.endNodeId as string);
+      connector.connectorEnd = {
+        endpointNodeId: endNode.id,
+        magnet: (p.endMagnet as ConnectorEndpointEndpointNodeIdAndMagnet['magnet']) || 'AUTO',
+      };
+    }
+    if (p.strokeColor) {
+      const c = p.strokeColor as { r: number; g: number; b: number };
+      connector.strokes = [{ type: 'SOLID', color: { r: c.r, g: c.g, b: c.b } }];
+    }
+    if (p.strokeWeight !== undefined) connector.strokeWeight = p.strokeWeight as number;
+    if (p.connectorLineType) connector.connectorLineType = p.connectorLineType as 'STRAIGHT' | 'ELBOWED';
+    if (p.connectorStartStrokeCap) connector.connectorStartStrokeCap = p.connectorStartStrokeCap as ConnectorStrokeCap;
+    if (p.connectorEndStrokeCap) connector.connectorEndStrokeCap = p.connectorEndStrokeCap as ConnectorStrokeCap;
+    return { id: connector.id, name: connector.name };
+  },
+
+  create_shape_with_text: async (p) => {
+    const shapeType =
+      (p.shapeType as
+        | 'SQUARE'
+        | 'ELLIPSE'
+        | 'ROUNDED_RECTANGLE'
+        | 'DIAMOND'
+        | 'TRIANGLE_UP'
+        | 'TRIANGLE_DOWN'
+        | 'PARALLELOGRAM_RIGHT'
+        | 'PARALLELOGRAM_LEFT'
+        | 'ENG_DATABASE'
+        | 'ENG_QUEUE'
+        | 'ENG_FILE'
+        | 'ENG_FOLDER') || 'ROUNDED_RECTANGLE';
+    const shapeWithText = figma.createShapeWithText();
+    shapeWithText.shapeType = shapeType;
+    if (p.text) {
+      await figma.loadFontAsync(shapeWithText.text.fontName as FontName);
+      shapeWithText.text.characters = p.text as string;
+    }
+    if (p.name) shapeWithText.name = p.name as string;
+    if (p.x !== undefined) shapeWithText.x = p.x as number;
+    if (p.y !== undefined) shapeWithText.y = p.y as number;
+    if (p.width !== undefined && p.height !== undefined) {
+      shapeWithText.resize(p.width as number, p.height as number);
+    }
+    if (p.color) {
+      const c = p.color as { r: number; g: number; b: number };
+      shapeWithText.fills = [{ type: 'SOLID', color: { r: c.r, g: c.g, b: c.b } }];
+    }
+    await appendToParent(shapeWithText, p.parentId as string);
+    return { id: shapeWithText.id, name: shapeWithText.name };
+  },
+
   // ==================== Style Commands (Additional) ====================
 
   create_effect_style: async (p) => {
@@ -1732,14 +1924,18 @@ const commandHandlers: Record<string, CommandHandler> = {
   create_image_from_url: async (p) => {
     const image = await figma.createImageAsync(p.url as string);
     const size = await image.getSizeAsync();
-    // Create a rectangle with the image as fill
     const rect = figma.createRectangle();
     rect.name = (p.name as string) || 'Image';
     rect.x = (p.x as number) || 0;
     rect.y = (p.y as number) || 0;
     rect.resize((p.width as number) || size.width, (p.height as number) || size.height);
     rect.fills = [
-      { type: 'IMAGE', imageHash: image.hash, scaleMode: (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL' },
+      {
+        type: 'IMAGE',
+        imageHash: image.hash,
+        scaleMode: (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL',
+        ...(p.filters ? { filters: p.filters as ImageFilters } : {}),
+      },
     ];
     await appendToParent(rect, p.parentId as string);
     return { id: rect.id, name: rect.name, imageHash: image.hash, width: size.width, height: size.height };

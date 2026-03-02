@@ -1,152 +1,179 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { colorSchema, parseColor, type RGBAInput } from '../utils/color.ts';
-import { registerToolsFromDefs, type ToolDef } from './registry.ts';
+import { formatErrorResponse } from '../utils/errors.ts';
+import { sendCommand } from '../utils/ws-bridge.ts';
 
-const tools: ToolDef[] = [
+// Custom registration for pilot_set_text (multi-dispatch tool)
+
+const setTextSchema = z.object({
+  nodeId: z.union([z.string(), z.array(z.string())]).describe('Target text node ID(s)'),
+  characters: z.string().optional().describe('Text content'),
+  fontSize: z.number().min(1).optional().describe('Font size (px)'),
+  fontFamily: z.string().optional().describe('Font family'),
+  fontStyle: z.string().optional().describe('Font style'),
+  fontWeight: z.number().optional().describe('Font weight (100-900)'),
+  color: colorSchema.optional().describe("Text color: '#FF0000' or {r,g,b,a}"),
+  lineHeight: z.number().min(0).optional().describe('Line height'),
+  lineHeightUnit: z.enum(['PIXELS', 'PERCENT', 'AUTO']).optional().describe('Line height unit'),
+  letterSpacing: z.number().optional().describe('Letter spacing'),
+  letterSpacingUnit: z.enum(['PIXELS', 'PERCENT']).optional().describe('Letter spacing unit'),
+  textAlignHorizontal: z.enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED']).optional().describe('Horizontal align'),
+  textAlignVertical: z.enum(['TOP', 'CENTER', 'BOTTOM']).optional().describe('Vertical align'),
+  textDecoration: z.enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH']).optional().describe('Decoration'),
+  textCase: z
+    .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE', 'SMALL_CAPS', 'SMALL_CAPS_FORCED'])
+    .optional()
+    .describe('Text case'),
+  paragraphIndent: z.number().min(0).optional().describe('Paragraph indent (px)'),
+  paragraphSpacing: z.number().min(0).optional().describe('Paragraph spacing (px)'),
+  fields: z.array(z.string()).optional().describe('Fields to return'),
+});
+
+interface TextCommand {
+  condition: (params: Record<string, unknown>) => boolean;
+  command: string;
+  buildParams: (nodeId: string, params: Record<string, unknown>) => Record<string, unknown>;
+}
+
+const textCommands: TextCommand[] = [
   {
-    name: 'pilot_set_text_content',
-    description: 'Set text content. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      characters: z.string().describe('New text content'),
-    }),
+    condition: (p) => p.characters !== undefined,
     command: 'set_text_content',
-    type: 'write',
+    buildParams: (nodeId, p) => ({ nodeId, characters: p.characters }),
   },
   {
-    name: 'pilot_set_font_size',
-    description: 'Set font size. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      fontSize: z.number().min(1).describe('Font size (px)'),
-    }),
+    condition: (p) => p.fontSize !== undefined,
     command: 'set_font_size',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, fontSize: p.fontSize }),
   },
   {
-    name: 'pilot_set_font_name',
-    description: 'Set font family and style. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      family: z.string().describe("Font family (e.g., 'Inter')"),
-      style: z.string().default('Regular').describe("Font style (e.g., 'Bold')"),
-    }),
+    condition: (p) => p.fontFamily !== undefined,
     command: 'set_font_name',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, family: p.fontFamily, style: p.fontStyle ?? 'Regular' }),
   },
   {
-    name: 'pilot_set_font_weight',
-    description: 'Set font weight. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      fontWeight: z.number().describe('Font weight (100-900)'),
-    }),
+    condition: (p) => p.fontWeight !== undefined,
     command: 'set_font_weight',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, fontWeight: p.fontWeight }),
   },
   {
-    name: 'pilot_set_text_color',
-    description: 'Set text color. Accepts HEX or RGBA. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      color: colorSchema.describe("Color: '#FF0000' or {r,g,b,a}"),
-    }),
+    condition: (p) => p.color !== undefined,
     command: 'set_text_color',
-    type: 'write',
-    supportsBatch: true,
-    transform: (params) => ({
-      nodeId: params.nodeId,
-      ...parseColor(params.color as string | RGBAInput),
-    }),
+    buildParams: (nodeId, p) => ({ nodeId, ...parseColor(p.color as string | RGBAInput) }),
   },
   {
-    name: 'pilot_set_line_height',
-    description: 'Set line height. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      lineHeight: z.number().min(0).describe('Line height value'),
-      unit: z.enum(['PIXELS', 'PERCENT', 'AUTO']).default('PIXELS').describe('Unit'),
-    }),
+    condition: (p) => p.lineHeight !== undefined,
     command: 'set_line_height',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, lineHeight: p.lineHeight, unit: p.lineHeightUnit ?? 'PIXELS' }),
   },
   {
-    name: 'pilot_set_letter_spacing',
-    description: 'Set letter spacing. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      letterSpacing: z.number().describe('Letter spacing value'),
-      unit: z.enum(['PIXELS', 'PERCENT']).default('PIXELS').describe('Unit'),
-    }),
+    condition: (p) => p.letterSpacing !== undefined,
     command: 'set_letter_spacing',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, letterSpacing: p.letterSpacing, unit: p.letterSpacingUnit ?? 'PIXELS' }),
   },
   {
-    name: 'pilot_set_text_align',
-    description: 'Set text alignment. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      horizontal: z.enum(['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED']).optional().describe('Horizontal alignment'),
-      vertical: z.enum(['TOP', 'CENTER', 'BOTTOM']).optional().describe('Vertical alignment'),
-    }),
+    condition: (p) => p.textAlignHorizontal !== undefined || p.textAlignVertical !== undefined,
     command: 'set_text_align',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, horizontal: p.textAlignHorizontal, vertical: p.textAlignVertical }),
   },
   {
-    name: 'pilot_set_text_decoration',
-    description: 'Set text decoration. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      decoration: z.enum(['NONE', 'UNDERLINE', 'STRIKETHROUGH']).describe('Text decoration'),
-    }),
+    condition: (p) => p.textDecoration !== undefined,
     command: 'set_text_decoration',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, decoration: p.textDecoration }),
   },
   {
-    name: 'pilot_set_text_case',
-    description: 'Set text case. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      textCase: z
-        .enum(['ORIGINAL', 'UPPER', 'LOWER', 'TITLE', 'SMALL_CAPS', 'SMALL_CAPS_FORCED'])
-        .describe('Text case'),
-    }),
+    condition: (p) => p.textCase !== undefined,
     command: 'set_text_case',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, textCase: p.textCase }),
   },
   {
-    name: 'pilot_set_paragraph_indent',
-    description: 'Set paragraph indent. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      paragraphIndent: z.number().min(0).describe('Paragraph indent (px)'),
-    }),
+    condition: (p) => p.paragraphIndent !== undefined,
     command: 'set_paragraph_indent',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, paragraphIndent: p.paragraphIndent }),
   },
   {
-    name: 'pilot_set_paragraph_spacing',
-    description: 'Set paragraph spacing. Supports batch. [WRITE]',
-    schema: z.object({
-      nodeId: z.string().describe('Target text node ID'),
-      paragraphSpacing: z.number().min(0).describe('Paragraph spacing (px)'),
-    }),
+    condition: (p) => p.paragraphSpacing !== undefined,
     command: 'set_paragraph_spacing',
-    type: 'write',
-    supportsBatch: true,
+    buildParams: (nodeId, p) => ({ nodeId, paragraphSpacing: p.paragraphSpacing }),
   },
 ];
 
+async function executeTextCommands(
+  nodeId: string,
+  params: Record<string, unknown>,
+): Promise<{ results: unknown[]; errors: string[] }> {
+  const results: unknown[] = [];
+  const errors: string[] = [];
+
+  for (const cmd of textCommands) {
+    if (cmd.condition(params)) {
+      try {
+        const cmdParams = cmd.buildParams(nodeId, params);
+        const result = await sendCommand(cmd.command, cmdParams);
+        if (result.success) {
+          results.push({ command: cmd.command, ...(result.result as object) });
+        } else {
+          errors.push(`${cmd.command}: ${result.error}`);
+        }
+      } catch (err) {
+        errors.push(`${cmd.command}: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  return { results, errors };
+}
+
 export function registerTextTools(server: McpServer): void {
-  registerToolsFromDefs(server, tools);
+  const extendedShape = { ...setTextSchema.shape } as Record<string, z.ZodTypeAny>;
+  extendedShape.fields = z.array(z.string()).optional().describe('Fields to return');
+
+  server.registerTool(
+    'pilot_set_text',
+    {
+      description: 'Set text properties (content/font/color/spacing/align) [WRITE] [BATCH]',
+      inputSchema: extendedShape as Record<string, z.ZodTypeAny>,
+    },
+    async (params) => {
+      const { fields, ...restParams } = params as Record<string, unknown> & { fields?: string[] };
+      const nodeIdValue = restParams.nodeId;
+      const nodeIds = Array.isArray(nodeIdValue) ? (nodeIdValue as string[]) : [nodeIdValue as string];
+
+      try {
+        const allResults: unknown[] = [];
+        const allErrors: string[] = [];
+
+        for (const nodeId of nodeIds) {
+          const { results, errors } = await executeTextCommands(nodeId, restParams);
+          allResults.push(...results);
+          allErrors.push(...errors);
+        }
+
+        const responseData =
+          nodeIds.length === 1
+            ? {
+                success: allErrors.length === 0,
+                results: allResults,
+                errors: allErrors.length > 0 ? allErrors : undefined,
+              }
+            : {
+                success: allErrors.length === 0,
+                results: allResults,
+                errors: allErrors.length > 0 ? allErrors : undefined,
+                count: { total: nodeIds.length, success: nodeIds.length - allErrors.length, failed: allErrors.length },
+              };
+
+        return {
+          content: [{ type: 'text', text: JSON.stringify(responseData) }],
+          isError: allErrors.length > 0 && allResults.length === 0,
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: formatErrorResponse(err) }],
+          isError: true,
+        };
+      }
+    },
+  );
 }
