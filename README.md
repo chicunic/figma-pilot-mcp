@@ -1,5 +1,9 @@
 # figma-pilot-mcp
 
+[![version](https://img.shields.io/badge/version-0.3.0-blue)](https://github.com/chicunic/figma-pilot-mcp)
+[![license](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
+[![node](https://img.shields.io/badge/runtime-bun-f472b6)](https://bun.sh/)
+
 An MCP server that gives AI full control over Figma — read, create, and modify designs with ease.
 
 ## Features
@@ -9,79 +13,53 @@ An MCP server that gives AI full control over Figma — read, create, and modify
 - **Batch Operations**: Execute multiple commands in sequence with result references
 - **Flexible Deployment**: Run all-in-one, or split MCP and WebSocket into separate processes
 
-## Installation
+## Prerequisites
 
-```bash
-bun install
-```
+- [Bun](https://bun.sh/) runtime
+- [Figma Desktop](https://www.figma.com/downloads/) app
 
-## Quick Start
+## Getting Started
 
-1. **Build the Figma plugin**:
+1. **Install dependencies and build plugin**:
 
    ```bash
-   bun run build
+   bunx figma-pilot init
    ```
 
 2. **Import plugin into Figma Desktop**:
 
-   - Open Figma Desktop app
-   - Go to **Plugins** → **Development** → **Import plugin from manifest...**
-   - Select `dist/plugin/manifest.json`
+   - **Plugins** → **Development** → **Import plugin from manifest...**
+   - Select the `dist/plugin/manifest.json` in this project folder
 
-   > **Note**: Requires Figma Desktop. The web version does not support local plugin development.
-
-3. **Configure your AI agent** (see [Deployment Modes](#deployment-modes) below)
+3. **Configure your AI agent** (see [below](#configure-your-ai-agent))
 
 4. **Run the plugin and connect**:
 
-   - In Figma, open a design file
-   - Go to **Plugins** → **Development** → **Figma Pilot MCP**
+   - Open a design file in **Design mode**, run **Plugins** → **Development** → **Figma Pilot MCP**
    - The plugin UI shows a channel name (e.g., `figma-pilot-abc123`)
    - In your AI agent, use `pilot_connect` with the channel name
 
-## Deployment Modes
+## Configure Your AI Agent
 
-The server supports three run modes via `--mode=` argument or `FIGMA_RUN_MODE` env var:
-
-### Mode 1: All-in-one (default)
-
-MCP server and WebSocket server run in the same process. Simplest setup.
+### Mode 1: All-in-one (recommended)
 
 ```mermaid
 graph LR
   A[AI Agent] <--stdio--> B[MCP + WS Server] <--ws--> C[Figma Plugin]
 ```
 
-#### Claude Desktop / Claude Code config
-
 ```jsonc
 {
   "mcpServers": {
     "figma-pilot": {
-      "command": "bun",
-      "args": ["run", "/path/to/figma-pilot-mcp/src/server.ts"]
-    }
-  }
-}
-```
-
-**Cursor config** (`~/.cursor/mcp.json`):
-
-```jsonc
-{
-  "mcpServers": {
-    "figma-pilot": {
-      "command": "bun",
-      "args": ["run", "/path/to/figma-pilot-mcp/src/server.ts"]
+      "command": "bunx",
+      "args": ["figma-pilot", "start"]
     }
   }
 }
 ```
 
 ### Mode 2: Separate WS + MCP (multi-agent)
-
-Run a standalone WebSocket server, then multiple MCP clients connect to it. Useful when multiple AI agents share one Figma connection, or when the WS server runs on a different machine.
 
 ```mermaid
 graph LR
@@ -92,53 +70,45 @@ graph LR
   E <--ws--> F[Figma Plugin]
 ```
 
-#### Step 1: Start the WebSocket server
+1. **Start the WebSocket server**:
 
-```bash
-# Terminal 1: WS server on port 3846 (default)
-bun run start:ws
+   ```bash
+   bunx figma-pilot start --mode=ws
+   ```
 
-# Or specify a custom port
-FIGMA_WS_PORT=4000 bun run start:ws
-```
+2. **Configure AI agents**:
 
-#### Step 2: Configure AI agents to use MCP-only mode
+   ```jsonc
+   {
+     "mcpServers": {
+       "figma-pilot": {
+         "command": "bunx",
+         "args": ["figma-pilot", "start", "--mode=mcp"]
+       }
+     }
+   }
+   ```
 
-```jsonc
-{
-  "mcpServers": {
-    "figma-pilot": {
-      "command": "bun",
-      "args": ["run", "/path/to/figma-pilot-mcp/src/server.ts", "--mode=mcp"],
-      "env": {
-        "FIGMA_WS_PORT": "3846"
-      }
-    }
-  }
-}
-```
-
-### Mode 3: WS-only (headless relay)
-
-Only start the WebSocket relay server — no MCP. Useful as a standalone bridge service.
-
-```bash
-bun run start:ws
-# or
-FIGMA_WS_PORT=3846 bun run src/server.ts --mode=ws
-```
+## Reference
 
 ### Mode Summary
 
-| Mode | CLI | MCP Server | WS Server | WS Client | Use Case |
+| Mode | CLI | MCP | WS Server | WS Client | Use Case |
 | - | - | - | - | - | - |
-| `all` | `bun run start` | Yes | Yes | No | Single-agent setup |
-| `mcp` | `bun run start:mcp` | Yes | No | Yes | Multi-agent / remote WS |
-| `ws` | `bun run start:ws` | No | Yes | No | Standalone WS relay |
+| `all` | `--mode=all` | Yes | Yes | No | Single-agent |
+| `mcp` | `--mode=mcp` | Yes | No | Yes | Multi-agent / remote WS |
+| `ws` | `--mode=ws` | No | Yes | No | Standalone relay |
 
-## Configuration
+### CLI Commands
 
-Environment variables:
+| Command | Description |
+| - | - |
+| `bunx figma-pilot init` | Install dependencies and build the plugin |
+| `bunx figma-pilot build` | Rebuild the Figma plugin |
+| `bunx figma-pilot start` | Start the server (default: all-in-one mode) |
+| `bunx figma-pilot doctor` | Run diagnostics checks |
+
+### Configuration
 
 | Variable | Default | Description |
 | - | - | - |
@@ -316,97 +286,6 @@ Environment variables:
 | Tool | Description |
 | - | - |
 | `pilot_batch` | Execute multiple commands in sequence |
-
-## Using Batch Operations
-
-The `pilot_batch` tool executes multiple commands in sequence, referencing previous results with `$N`:
-
-```json
-{
-  "commands": [
-    { "command": "create_frame", "params": { "name": "Container", "width": 200, "height": 200 } },
-    { "command": "create_rectangle", "params": { "parentId": "$0.id", "width": 100, "height": 100 } },
-    { "command": "set_fill_color", "params": { "nodeId": "$1.id", "r": 1, "g": 0, "b": 0 } }
-  ]
-}
-```
-
-## Creating Node Trees
-
-The `pilot_create_node_tree` tool creates nested structures in a single call:
-
-```json
-{
-  "tree": {
-    "type": "FRAME",
-    "name": "Card",
-    "width": 300,
-    "height": 200,
-    "layoutMode": "VERTICAL",
-    "paddingTop": 16,
-    "paddingRight": 16,
-    "paddingBottom": 16,
-    "paddingLeft": 16,
-    "itemSpacing": 12,
-    "fills": [{ "type": "SOLID", "color": { "r": 1, "g": 1, "b": 1 } }],
-    "cornerRadius": 8,
-    "children": [
-      {
-        "type": "TEXT",
-        "name": "Title",
-        "characters": "Hello World",
-        "fontSize": 24,
-        "fontFamily": "Inter",
-        "fontStyle": "Bold"
-      },
-      {
-        "type": "RECTANGLE",
-        "name": "Divider",
-        "width": 268,
-        "height": 1,
-        "fills": [{ "type": "SOLID", "color": { "r": 0.9, "g": 0.9, "b": 0.9 } }]
-      }
-    ]
-  }
-}
-```
-
-## MCP Prompts
-
-| Prompt | Description |
-| - | - |
-| `quick_start` | Get started with Figma Pilot MCP |
-| `design_system` | Create a basic design system structure |
-| `auto_layout` | Master Auto Layout in Figma |
-| `component_workflow` | Best practices for working with components |
-| `batch_operations` | Efficient batch operations for bulk changes |
-| `prototyping` | Add prototype interactions and flows |
-| `variables` | Working with Figma variables |
-| `events` | Event subscription system |
-| `images` | Working with images |
-| `typography` | Advanced text and typography |
-| `variants` | Component variants workflow |
-| `node_tree` | Create complex nested structures in one call |
-| `utilities` | Color parsing and utility functions |
-
-## Error Handling
-
-```json
-{
-  "error": true,
-  "code": 2001,
-  "message": "Node not found."
-}
-```
-
-| Code Range | Category |
-| - | - |
-| 1xxx | Connection errors |
-| 2xxx | Node errors |
-| 3xxx | Command errors |
-| 4xxx | Permission errors |
-| 5xxx | Resource errors |
-| 6xxx | Plugin errors |
 
 ## License
 

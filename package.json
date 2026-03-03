@@ -1,6 +1,6 @@
 {
   "name": "figma-pilot-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "An MCP server that gives AI full control over Figma — read, create, and modify designs.",
   "type": "module",
   "scripts": {
@@ -11,9 +11,8 @@
     "start:ws": "bun run src/server.ts --mode=ws",
     "start:mcp": "bun run src/server.ts --mode=mcp",
     "build": "bunx esbuild src/plugin/code.ts --bundle --outfile=dist/plugin/code.js --target=es2018 --format=iife && cp src/plugin/manifest.json src/plugin/ui.html dist/plugin/",
-    "typecheck": "tsc --noEmit && tsc -p src/plugin/tsconfig.json",
-    "lint": "biome check src",
-    "lint:fix": "biome check src --write"
+    "check": "tsc --noEmit && tsc -p src/plugin/tsconfig.json && biome check src",
+    "fix": "biome check src --write"
   },
   "keywords": [
     "figma",
@@ -25,14 +24,17 @@
   ],
   "author": "chicunic",
   "license": "MIT",
+  "bin": {
+    "figma-pilot": "src/cli.ts"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.4",
+    "@biomejs/biome": "^2.4.5",
     "@figma/plugin-typings": "^1.123.0",
-    "@types/bun": "^1.3.9",
+    "@types/bun": "^1.3.10",
     "typescript": "^5.9.3"
   }
 }

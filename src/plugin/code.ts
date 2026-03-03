@@ -519,14 +519,15 @@ const commandHandlers: Record<string, CommandHandler> = {
     rect.x = (p.x as number) || 0;
     rect.y = (p.y as number) || 0;
     rect.resize((p.width as number) || 100, (p.height as number) || 100);
-    rect.fills = [
+    const fill: ImagePaint = Object.assign(
       {
-        type: 'IMAGE',
+        type: 'IMAGE' as const,
         imageHash: image.hash,
         scaleMode: (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL',
-        ...(p.filters ? { filters: p.filters as ImageFilters } : {}),
       },
-    ];
+      p.filters ? { filters: p.filters as ImageFilters } : {},
+    );
+    rect.fills = [fill];
     await appendToParent(rect, p.parentId as string);
     return { id: rect.id, name: rect.name, imageHash: image.hash };
   },
@@ -619,14 +620,11 @@ const commandHandlers: Record<string, CommandHandler> = {
       throw new Error('Must provide imageHash, base64, or url');
     }
     const scaleMode = (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL';
-    (node as GeometryMixin).fills = [
-      {
-        type: 'IMAGE',
-        imageHash,
-        scaleMode,
-        ...(p.filters ? { filters: p.filters as ImageFilters } : {}),
-      },
-    ];
+    const imgFill: ImagePaint = Object.assign(
+      { type: 'IMAGE' as const, imageHash, scaleMode },
+      p.filters ? { filters: p.filters as ImageFilters } : {},
+    );
+    (node as GeometryMixin).fills = [imgFill];
     return { id: node.id, imageHash };
   },
 
@@ -637,8 +635,9 @@ const commandHandlers: Record<string, CommandHandler> = {
     const fillIndex = (p.fillIndex as number) ?? 0;
     const fill = fills[fillIndex];
     if (!fill || fill.type !== 'IMAGE') throw new Error('No IMAGE fill at specified index');
-    const newFills = [...fills];
-    newFills[fillIndex] = { ...fill, filters: p.filters as ImageFilters };
+    const newFills = fills.slice();
+    const updated = Object.assign({}, fill, { filters: p.filters as ImageFilters });
+    newFills[fillIndex] = updated;
     (node as GeometryMixin).fills = newFills;
     return { id: node.id };
   },
@@ -1929,14 +1928,15 @@ const commandHandlers: Record<string, CommandHandler> = {
     rect.x = (p.x as number) || 0;
     rect.y = (p.y as number) || 0;
     rect.resize((p.width as number) || size.width, (p.height as number) || size.height);
-    rect.fills = [
+    const imgPaint: ImagePaint = Object.assign(
       {
-        type: 'IMAGE',
+        type: 'IMAGE' as const,
         imageHash: image.hash,
         scaleMode: (p.scaleMode as 'FILL' | 'FIT' | 'CROP' | 'TILE') || 'FILL',
-        ...(p.filters ? { filters: p.filters as ImageFilters } : {}),
       },
-    ];
+      p.filters ? { filters: p.filters as ImageFilters } : {},
+    );
+    rect.fills = [imgPaint];
     await appendToParent(rect, p.parentId as string);
     return { id: rect.id, name: rect.name, imageHash: image.hash, width: size.width, height: size.height };
   },

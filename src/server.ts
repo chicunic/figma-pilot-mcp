@@ -9,7 +9,7 @@ import { setBridge } from './utils/ws-bridge.ts';
 
 // ==================== Run Mode ====================
 
-type RunMode = 'all' | 'mcp' | 'ws';
+export type RunMode = 'all' | 'mcp' | 'ws';
 
 function parseRunMode(): RunMode {
   // Check CLI args: --mode=all|mcp|ws
@@ -63,7 +63,7 @@ function setupShutdownHandlers(cleanup: () => void): void {
 
 // ==================== Mode: WS Only ====================
 
-async function startWsOnly(): Promise<void> {
+export async function startWsOnly(): Promise<void> {
   const { startWebSocketServer } = await import('./utils/websocket.ts');
   const wsServer = startWebSocketServer();
 
@@ -76,7 +76,7 @@ async function startWsOnly(): Promise<void> {
 
 // ==================== Mode: MCP Only ====================
 
-async function startMcpOnly(): Promise<void> {
+export async function startMcpOnly(): Promise<void> {
   const wsClient = await import('./utils/ws-client.ts');
 
   // Wire bridge to use WS client
@@ -106,7 +106,7 @@ async function startMcpOnly(): Promise<void> {
 
 // ==================== Mode: All (default) ====================
 
-async function startAll(): Promise<void> {
+export async function startAll(): Promise<void> {
   const wsModule = await import('./utils/websocket.ts');
   const wsServer = wsModule.startWebSocketServer();
 
@@ -151,7 +151,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  logger.error('Failed to start server', error);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    logger.error('Failed to start server', error);
+    process.exit(1);
+  });
+}
